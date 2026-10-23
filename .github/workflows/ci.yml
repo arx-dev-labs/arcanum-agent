@@ -1,0 +1,223 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+env:
+  NODE_VERSION: '20'
+  CMAKE_VERSION: '3.25'
+
+jobs:
+  # Frontend Tests
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+  # Engine Tests (Linux)
+  engine-test-linux:
+    name: Engine Tests (Linux)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./engine
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libssl-dev
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --config Release -j$(nproc)
+
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure
+
+  # Engine Tests (macOS)
+  engine-test-macos:
+    name: Engine Tests (macOS)
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ./engine
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install cmake openssl
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --config Release -j$(sysctl -n hw.ncpu)
+
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure
+
+  # Engine Tests (Windows)
+  engine-test-windows:
+    name: Engine Tests (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ./engine
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          choco install cmake openssl --confirm
+
+      - name: Configure CMake
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --config Release -j
+
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure -C Release
+
+  # Build Release Binaries
+  build-release:
+    name: Build Release
+    needs: [frontend-test, engine-test-linux, engine-test-macos, engine-test-windows]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Install engine deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libssl-dev
+
+      - name: Build engine (Linux)
+        run: |
+          cd engine
+          mkdir -p build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --config Release -j$(nproc)
+
+      - name: Package binaries
+        run: |
+          cd frontend
+          npx pkg dist/cli.js \
+            --targets node20-linux-x64,node20-macos-x64,node20-win-x64 \
+            --output ../dist/arx \
+            --compress Brotli
+          cp ../../engine/build/arx-engine ../dist/arx-engine
+
+      - name: Create release archives
+        run: |
+          cd dist
+          tar -czf arx-linux-x64.tar.gz arx arx-engine
+          zip arx-win-x64.zip arx.exe arx-engine.exe
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-binaries
+          path: dist/
+          retention-days: 30
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: github.event_name == 'release'
+        with:
+          files: |
+            dist/arx-linux-x64.tar.gz
+            dist/arx-win-x64.zip
+            dist/arx-macos-x64.tar.gz
+
+  # Docker Build
+  docker:
+    name: Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t arx-cli:${{ github.sha }} .
+          docker tag arx-cli:${{ github.sha }} arx-cli:latest
+
+      - name: Push to registry
+        if: github.event_name == 'release'
+        run: |
+          echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+          docker push arx-cli:${{ github.sha }}
+          docker push arx-cli:latest

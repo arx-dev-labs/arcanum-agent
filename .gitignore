@@ -1,0 +1,105 @@
+# ============================================================================
+# ARX CLI - .gitignore
+# ============================================================================
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Build outputs
+frontend/dist/
+engine/build/
+dist/
+
+# Local development data (created at runtime)
+.arx/
+~/.arx/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files (contain secrets/API keys)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# Engine runtime config (generated at runtime, contains API keys)
+# DO NOT COMMIT - these are created in ~/.arx/
+*.config.json
+
+# Plugin binaries (compiled plugins)
+*.so
+*.dylib
+*.dll
+
+# Compiled binaries
+*.exe
+arx
+arx-engine
+arx-*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# TypeScript
+*.tsbuildinfo
+
+# Package artifacts
+*.tgz
+*.tar.gz
+*.zip
+*.pkg
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# OS/Editor specific
+*.orig
+*.rej
+.bak
+*.bak
+
+# Logs from engine
+engine.log
+arx.log
+
+# Profiling
+*.prof
+*.cpuprofile
+*.heapprofile
+
+# Misc
+*.pid
+*.seed
+*.pid.lock
+
+# ============================================================================
+# ALLOWED (uncomment if you want to track these)
+# ============================================================================
+# !.vscode/extensions.json
+# !.vscode/settings.json
+# !.github/

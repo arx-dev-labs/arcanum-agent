@@ -1,0 +1,211 @@
+// Input component with multiline support, history, and slash commands
+
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Box, Text, TextInput, useInput, useStdout } from 'ink';
+import { useTheme } from '../../store';
+import { GradientText, Pulse } from '../animated/AnimatedBox';
+import type { ChatMessage } from '../../types';
+
+interface InputProps {
+  onSubmit: (message: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  model?: string;
+  provider?: string;
+}
+
+export function Input({ onSubmit, disabled = false, placeholder, model, provider }: InputProps) {
+  const { theme } = useTheme();
+  const stdout = useStdout();
+  const [value, setValue] = useState('');
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [showCommands, setShowCommands] = useState(false);
+  const [commandIndex, setCommandIndex] = useState(0);
+  const textareaRef = useRef<any>(null);
+  const [height, setHeight] = useState(1);
+
+  const commands = [
+    { name: '/model', desc: 'Switch model', usage: '/model <name>' },
+    { name: '/provider', desc: 'Switch provider', usage: '/provider <name>' },
+    { name: '/theme', desc: 'Switch theme', usage: '/theme <name>' },
+    { name: '/new', desc: 'New conversation', usage: '/new' },
+    { name: '/clear', desc: 'Clear history', usage: '/clear' },
+    { name: '/help', desc: 'Show help', usage: '/help' },
+    { name: '/plugins', desc: 'Manage plugins', usage: '/plugins' },
+    { name: '/settings', desc: 'Open settings', usage: '/settings' },
+    { name: '/export', desc: 'Export conversation', usage: '/export' },
+    { name: '/compact', desc: 'Compact mode', usage: '/compact' },
+  ];
+
+  const filteredCommands = commands.filter((c) =>
+    c.name.startsWith(value.toLowerCase()) || c.desc.toLowerCase().includes(value.toLowerCase().slice(1))
+  );
+
+  // Auto-resize height based on content
+  useEffect(() => {
+    const lines = value.split('\n').length;
+    setHeight(Math.min(Math.max(lines, 1), 10));
+  }, [value]);
+
+  // Handle input
+  const handleInput = useCallback((input: string) => {
+    if (disabled) return;
+    setValue((prev) => prev + input);
+    setHistoryIndex(-1);
+    setShowCommands(value.startsWith('/'));
+    if (value.startsWith('/')) setCommandIndex(0);
+  }, [disabled, value]);
+
+  // Handle special keys
+  useInput((input, key) => {
+    if (disabled) return;
+
+    if (key.return && (key.shift || key.meta || key.ctrl)) {
+      // Shift+Enter or Meta+Enter = submit
+      if (value.trim()) {
+        onSubmit(value.trim());
+        setHistory((prev) => [value.trim(), ...prev.slice(0, 99)]);
+        setValue('');
+        setShowCommands(false);
+      }
+      return;
+    }
+
+    if (key.return && !key.shift && !key.meta && !key.ctrl) {
+      // Enter = new line
+      handleInput('\n');
+      return;
+    }
+
+    if (key.upArrow) {
+      if (showCommands && filteredCommands.length > 0) {
+        setCommandIndex((i) => Math.max(0, i - 1));
+      } else if (history.length > 0 && historyIndex < history.length - 1) {
+        setHistoryIndex((i) => i + 1);
+        setValue(history[historyIndex + 1]);
+      }
+      return;
+    }
+
+    if (key.downArrow) {
+      if (showCommands && filteredCommands.length > 0) {
+        setCommandIndex((i) => Math.min(filteredCommands.length - 1, i + 1));
+      } else if (historyIndex > 0) {
+        setHistoryIndex((i) => i - 1);
+        setValue(history[historyIndex - 1]);
+      } else if (historyIndex === 0) {
+        setHistoryIndex(-1);
+        setValue('');
+      }
+      return;
+    }
+
+    if (key.tab && showCommands && filteredCommands.length > 0) {
+      // Tab completes command
+      const cmd = filteredCommands[commandIndex];
+      setValue(cmd.name + ' ');
+      setShowCommands(false);
+      return;
+    }
+
+    if (key.backspace) {
+      setValue((prev) => prev.slice(0, -1));
+      setShowCommands(value.startsWith('/'));
+      return;
+    }
+
+    if (key.escape) {
+      setShowCommands(false);
+      setValue('');
+      return;
+    }
+  });
+
+  // Focus on mount
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, []);
+
+  return (
+    <Box
+      borderStyle="round"
+      borderColor={disabled ? theme.colors.border : theme.colors.primary}
+      backgroundColor={theme.colors.surface}
+      padding={1}
+      flexDirection="column"
+    >
+      {/* Model/Provider indicator */}
+      <Box flexDirection="row" alignItems="center" gap={1} marginBottom={0.5}>
+        <Box flexDirection="row" alignItems="center" gap={0.5} backgroundColor={theme.colors.primary + '22'} paddingX={1} paddingY={0.2}>
+          <Text style={{ color: theme.colors.primary, fontSize: 'small' }}>Model</Text>
+          <Text style={{ color: theme.colors.accent, fontSize: 'small', bold: true }}>{model || 'auto'}</Text>
+        </Box>
+        <Box flexDirection="row" alignItems="center" gap={0.5} backgroundColor={theme.colors.secondary + '22'} paddingX={1} paddingY={0.2}>
+          <Text style={{ color: theme.colors.secondary, fontSize: 'small' }}>Provider</Text>
+          <Text style={{ color: theme.colors.accent, fontSize: 'small', bold: true }}>{provider || 'auto'}</Text>
+        </Box>
+        <Box flex="1" />
+        {disabled && <Pulse color={theme.colors.error}>⏳ Processing...</Pulse>}
+      </Box>
+
+      {/* Text Input */}
+      <TextInput
+        ref={textareaRef}
+        value={value}
+        onChange={handleInput}
+        placeholder={placeholder || (disabled ? 'Processing...' : 'Type your message (Shift+Enter to send, / for commands)')}
+        multiline
+        style={{
+          color: theme.colors.text,
+          height: height,
+          minHeight: 1,
+          maxHeight: 10,
+        }}
+      />
+
+      {/* Command suggestions */}
+      {showCommands && filteredCommands.length > 0 && (
+        <Box marginTop={0.5} borderTop={{ width: 1, color: theme.colors.border }} paddingTop={0.5}>
+          <Text style={{ color: theme.colors.text_muted, fontSize: 'small', marginBottom: 0.5 }}>
+            Commands:
+          </Text>
+          <Box flexDirection="column">
+            {filteredCommands.map((cmd, i) => (
+              <Box
+                key={cmd.name}
+                flexDirection="row"
+                alignItems="center"
+                gap={1}
+                paddingX={1}
+                paddingY={0.2}
+                backgroundColor={i === commandIndex ? theme.colors.primary + '33' : 'transparent'}
+              >
+                <Text style={{ color: i === commandIndex ? theme.colors.primary : theme.colors.text_muted }}>
+                  {i === commandIndex ? '▸' : ' '}
+                </Text>
+                <GradientText colors={[theme.colors.primary, theme.colors.accent]} fontSize="small">
+                  {cmd.name}
+                </GradientText>
+                <Text style={{ color: theme.colors.text_muted, fontSize: 'small' }}>{cmd.desc}</Text>
+                <Text style={{ color: theme.colors.text_muted, fontSize: 'small' }}>{cmd.usage}</Text>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      )}
+
+      {/* Hint */}
+      <Box marginTop={0.5} flexDirection="row" alignItems="center" justifyContent="space-between">
+        <Text style={{ color: theme.colors.text_muted, fontSize: 'small' }}>
+          {disabled ? 'Waiting for response...' : 'Shift+Enter to send • / for commands • ↑↓ history'}
+        </Text>
+        <Text style={{ color: theme.colors.text_muted, fontSize: 'small' }}>
+          {value.length} chars • {value.split('\n').length} lines
+        </Text>
+      </Box>
+    </Box>
+  );
+}

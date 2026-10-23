@@ -1,0 +1,59 @@
+{
+  "name": "arx-cli",
+  "version": "1.0.0",
+  "description": "ARX - Beautiful CLI AI Agent with C++ Engine Core. Multi-provider (OpenAI, Anthropic, NVIDIA), plugin system, streaming TUI.",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "engine"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arx-cli/arx-cli.git"
+  },
+  "homepage": "https://github.com/arx-cli/arx-cli",
+  "bugs": {
+    "url": "https://github.com/arx-cli/arx-cli/issues"
+  },
+  "scripts": {
+    "install:all": "npm install && cd frontend && npm install && cd ../engine && mkdir -p build && cd build && cmake .. && make -j$(nproc)",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:engine\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:engine": "cd engine/build && ./arx-engine",
+    "build": "npm run build:frontend && npm run build:engine",
+    "build:frontend": "cd frontend && npm run build",
+    "build:engine": "cd engine/build && cmake --build . --config Release",
+    "start": "npm run build && npm run start:prod",
+    "start:prod": "cd frontend && node dist/cli.js",
+    "test": "npm run test:frontend && npm run test:engine",
+    "test:frontend": "cd frontend && npm test",
+    "test:engine": "cd engine/build && ctest --output-on-failure",
+    "lint": "npm run lint:frontend",
+    "lint:frontend": "cd frontend && npm run lint",
+    "clean": "rm -rf frontend/dist engine/build",
+    "package": "npm run build && npm run package:bin",
+    "package:bin": "pkg frontend/dist/cli.js --targets node20-linux-x64,node20-macos-x64,node20-win-x64 --output arx"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "pkg": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "cli",
+    "tui",
+    "ai",
+    "agent",
+    "chat",
+    "llm",
+    "cpp",
+    "ink",
+    "openai",
+    "anthropic",
+    "nvidia"
+  ],
+  "author": "arx-cli",
+  "license": "MIT"
+}

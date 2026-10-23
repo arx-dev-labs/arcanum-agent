@@ -1,0 +1,86 @@
+# ============================================================================
+# ARX CLI - .gitattributes
+# ============================================================================
+
+# Line endings
+* text=auto eol=lf
+
+# Windows batch files - keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# PowerShell scripts - keep CRLF
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.psd1 text eol=crlf
+
+# Shell scripts - force LF
+*.sh text eol=lf
+
+# Config files - force LF
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+
+# Documentation - force LF
+*.md text eol=lf
+*.txt text eol=lf
+*.rst text eol=lf
+
+# Source code - force LF
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.cpp text eol=lf
+*.hpp text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+
+# Binary files - don't touch
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
+
+# Compiled binaries
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.o binary
+*.obj binary
+*.lib binary
+*.a binary
+
+# Archives
+*.zip binary
+*.tar.gz binary
+*.tgz binary
+*.pkg binary
+
+# Lock files - keep as-is
+package-lock.json text eol=lf
+yarn.lock text eol=lf
+pnpm-lock.yaml text eol=lf
+
+# Export-ignore (not included in git archive)
+.gitattributes export-ignore
+.gitignore export-ignore
+.github/ export-ignore
+scripts/ export-ignore
+engine/tests/ export-ignore
+engine/examples/ export-ignore
+frontend/tests/ export-ignore
+*.md export-ignore
+Dockerfile export-ignore
+docker-compose.yml export-ignore
