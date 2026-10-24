@@ -18,7 +18,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/cli.tsx",
-    "build": "tsc && esbuild src/cli.tsx --bundle --platform=node --format=esm --outfile=dist/cli.js",
+    "build": "tsc && node esbuild.mjs",
     "start": "node dist/cli.js",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
