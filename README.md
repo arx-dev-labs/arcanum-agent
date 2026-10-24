@@ -11,6 +11,10 @@
 
 ---
 
+## AI DISCLOSURE
+
+---
+
 ## Architecture
 
 ```
@@ -344,4 +348,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-**Made with ❤️ by the [arx-cli](https://github.com/arx-cli) team**
+**Made with ❤️ by the [diffusion-group](https://github.com/idkdsdksjd) team and a helper hand of [MiMO]([)](https://github.com/XiaomiMiMo/MiMo-V2-Flash)!**
