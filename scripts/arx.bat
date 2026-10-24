@@ -1,290 +1,142 @@
 @echo off
 REM ============================================================================
-REM ARX CLI - Windows Launcher
+REM ARX CLI - Windows Launcher (development helper)
+REM ----------------------------------------------------------------------------
+REM Usage: arx.bat [option]
+REM
+REM Default (no option) runs the TUI against the source tree, wiring the
+REM frontend bundle to a locally built engine through ARX_ENGINE_BIN. The
+REM frontend spawns the engine over stdin/stdout itself - no detached engine
+REM process is started.
 REM ============================================================================
-REM This script builds and runs ARX CLI on Windows
-REM Usage: arx.bat [--dev | --build | --help]
-REM ============================================================================
 
-setlocal enabledelayedexpansion
+setlocal
 
-REM Colors
-set GREEN=\x1b[32m
-set BLUE=\x1b[34m
-set YELLOW=\x1b[33m
-set RED=\x1b[31m
-set RESET=\x1b[0m
+set "ROOT=%~dp0.."
 
-REM Project root
-set "ROOT_DIR=%~dp0.."
-cd /d "%ROOT_DIR%"
+if "%~1"=="" goto :run
+if /i "%~1"=="--run" goto :run
+if /i "%~1"=="--dev" goto :dev
+if /i "%~1"=="--build" goto :build
+if /i "%~1"=="--test" goto :test
+if /i "%~1"=="--clean" goto :clean
+if /i "%~1"=="--help" goto :help
+echo Unknown option: %~1
+goto :help
 
-REM Helper functions
-:log_info
-echo [%BLUE%INFO%RESET%] %*
-goto :eof
-
-:log_success
-echo [%GREEN%OK%RESET%] %*
-goto :eof
-
-:log_warn
-echo [%YELLOW%WARN%RESET%] %*
-goto :eof
-
-:log_error
-echo [%RED%ERROR%RESET%] %*
-goto :eof
-
-:print_usage
+:help
 echo.
 echo ARX CLI - Windows Launcher
 echo.
-echo Usage: arx.bat [command]
+echo Usage: arx.bat [option]
 echo.
-echo Commands:
-echo   --dev       Start development mode (hot reload)
-echo   --build     Build production binaries
-echo   --clean     Clean build artifacts
-echo   --start     Run production build
-echo   --help      Show this help
+echo Options:
+echo   --run     Run the TUI from the source tree (same as no option)
+echo   --dev     Hot-reload development mode - frontend + engine
+echo   --build   Build the C++ engine and the frontend bundle
+echo   --test    Run the frontend test suite
+echo   --clean   Remove build artifacts - frontend\dist and engine\build
+echo   --help    Show this help
 echo.
-echo Examples:
-echo   arx.bat --dev
-echo   arx.bat --build
-echo   arx.bat --start
-goto :eof
+exit /b 0
 
-REM Check dependencies
-:check_deps
-call :log_info "Checking dependencies..."
-
-where node >nul 2>nul
-if errorlevel 1 (
-    call :log_error "Node.js not found. Install from https://nodejs.org (v20+)"
-    exit /b 1
-)
-
-where cmake >nul 2>nul
-if errorlevel 1 (
-    call :log_error "CMake not found. Install from https://cmake.org (v3.20+)"
-    exit /b 1
-)
-
-where g++ >nul 2>nul || where clang++ >nul 2>nul || where cl >nul 2>nul
-if errorlevel 1 (
-    call :log_warn "C++ compiler not found. Install Visual Studio Build Tools or MinGW-w64"
-)
-
-for /f "tokens=2 delims=v." %%a in ('node --version') do set NODE_MAJOR=%%a
-if %NODE_MAJOR% LSS 20 (
-    call :log_error "Node.js version must be >= 20"
-    exit /b 1
-)
-
-call :log_success "All dependencies found"
-goto :eof
-
-REM Build frontend
-:build_frontend
-call :log_info "Building frontend..."
-cd /d "%ROOT_DIR%\frontend"
-
-if not exist node_modules (
-    call :log_info "Installing frontend dependencies..."
-    npm install
-    if errorlevel 1 (
-        call :log_error "npm install failed"
-        exit /b 1
-    )
-)
-
-call :log_info "Type checking..."
-npm run typecheck 2>nul || call :log_warn "TypeScript check failed (continuing)"
-
-call :log_info "Building frontend bundle..."
-npm run build
-if errorlevel 1 (
-    call :log_error "Frontend build failed"
-    exit /b 1
-)
-
-call :log_success "Frontend built successfully"
-cd /d "%ROOT_DIR%"
-goto :eof
-
-REM Build engine
-:build_engine
-call :log_info "Building C++ engine..."
-cd /d "%ROOT_DIR%\engine"
-
-if not exist build mkdir build
-cd build
-
-call :log_info "Configuring with CMake..."
-cmake .. -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64
-if errorlevel 1 (
-    call :log_error "CMake configure failed"
-    exit /b 1
-)
-
-call :log_info "Compiling engine..."
-cmake --build . --config Release -j
-if errorlevel 1 (
-    call :log_error "Engine build failed"
-    exit /b 1
-)
-
-if exist Release\arx-engine.exe (
-    copy Release\arx-engine.exe arx-engine.exe >nul
-)
-
-if not exist arx-engine.exe (
-    call :log_error "Engine binary not found after build"
-    exit /b 1
-)
-
-call :log_success "Engine built successfully"
-cd /d "%ROOT_DIR%"
-goto :eof
-
-REM Run tests
-:run_tests
-call :log_info "Running tests..."
-cd /d "%ROOT_DIR%\engine\build"
-
-if exist CTestTestfile.cmake (
-    ctest --output-on-failure -C Release
-    if errorlevel 1 (
-        call :log_error "Tests failed"
-        exit /b 1
-    )
-    call :log_success "All tests passed"
-) else (
-    call :log_warn "No tests configured"
-)
-cd /d "%ROOT_DIR%"
-goto :eof
-
-REM Development mode
-:dev_mode
-call :log_info "Starting ARX CLI in development mode..."
-
-REM Check if engine is built
-if not exist "%ROOT_DIR%\engine\build\arx-engine.exe" (
-    call :log_warn "Engine not built. Building now..."
-    call :build_engine
-)
-
-REM Start engine in background
-call :log_info "Starting C++ engine..."
-cd /d "%ROOT_DIR%\engine\build"
-start "ARX Engine" /b arx-engine.exe
-set ENGINE_PID=%ERRORLEVEL%
-
-REM Wait for engine
-timeout /t 2 /nobreak >nul
-
-REM Start frontend
-call :log_info "Starting frontend..."
-cd /d "%ROOT_DIR%\frontend"
-
-if not exist node_modules (
-    call :log_info "Installing frontend dependencies..."
-    npm install
-)
-
-call :log_success "Starting ARX CLI (Press Ctrl+C to stop)"
-npx tsx watch src/cli.tsx
-
-REM Cleanup on exit
-taskkill /F /FI "WINDOWTITLE eq ARX Engine*" >nul 2>&1
-goto :eof
-
-REM Production build
-:build_all
-call :build_frontend
-call :build_engine
-call :run_tests
-call :log_success "Build complete! Run with: arx.bat --start"
-goto :eof
-
-REM Production start
-:start_prod
-if not exist "%ROOT_DIR%\frontend\dist\cli.js" (
-    call :log_error "Frontend not built. Run: arx.bat --build"
-    exit /b 1
-)
-
-if not exist "%ROOT_DIR%\engine\build\arx-engine.exe" (
-    call :log_error "Engine not built. Run: arx.bat --build"
-    exit /b 1
-)
-
-call :log_info "Starting ARX CLI (production)..."
-cd /d "%ROOT_DIR%\engine\build"
-start "ARX Engine" /b arx-engine.exe
-
-timeout /t 1 /nobreak >nul
-
-cd /d "%ROOT_DIR%\frontend"
-node dist/cli.js
-
-taskkill /F /FI "WINDOWTITLE eq ARX Engine*" >nul 2>&1
-goto :eof
-
-REM Clean
-:clean_all
-call :log_info "Cleaning build artifacts..."
-if exist "%ROOT_DIR%\frontend\dist" rmdir /s /q "%ROOT_DIR%\frontend\dist"
-if exist "%ROOT_DIR%\engine\build" rmdir /s /q "%ROOT_DIR%\engine\build"
-call :log_success "Cleaned"
-goto :eof
-
-REM ============================================================================
-REM MAIN ENTRY POINT
-REM ============================================================================
-
-if "%~1"=="" (
-    call :print_usage
-    goto :eof
-)
-
-if "%~1"=="--help" (
-    call :print_usage
-    goto :eof
-)
-
-if "%~1"=="--dev" (
-    call :check_deps
-    call :dev_mode
-    goto :eof
-)
-
-if "%~1"=="--build" (
-    call :check_deps
-    call :build_all
-    goto :eof
-)
-
-if "%~1"=="--start" (
-    call :start_prod
-    goto :eof
-)
-
-if "%~1"=="--clean" (
-    call :clean_all
-    goto :eof
-
-)
-
-if "%~1"=="--test" (
-    call :check_deps
-    call :build_engine
-    call :run_tests
-    goto :eof
-)
-
-call :log_error "Unknown command: %~1"
-call :print_usage
+REM ----------------------------------------------------------------------------
+REM Run the TUI from the source tree
+REM ----------------------------------------------------------------------------
+:run
+if exist "%ROOT%\frontend\dist\cli.js" goto :run_engine
+echo [ERROR] Frontend not built. Build it first with:
+echo             arx.bat --build
 exit /b 1
+
+:run_engine
+where node >nul 2>nul
+if not errorlevel 1 goto :run_go
+echo [ERROR] Node.js not found on PATH. Install Node.js 20+ from https://nodejs.org
+exit /b 1
+
+:run_go
+set "ARX_ENGINE_BIN="
+if exist "%ROOT%\engine\build\arx-engine.exe" set "ARX_ENGINE_BIN=%ROOT%\engine\build\arx-engine.exe"
+if exist "%ROOT%\engine\build\Release\arx-engine.exe" set "ARX_ENGINE_BIN=%ROOT%\engine\build\Release\arx-engine.exe"
+if defined ARX_ENGINE_BIN goto :run_tui
+echo [INFO]  No engine binary found - the frontend will spawn one itself
+goto :run_tui
+
+:run_tui
+if defined ARX_ENGINE_BIN echo [INFO]  Engine detected: %ARX_ENGINE_BIN%
+cd /d "%ROOT%\frontend"
+node "%ROOT%\frontend\dist\cli.js"
+exit /b %ERRORLEVEL%
+
+REM ----------------------------------------------------------------------------
+REM Development mode (hot reload)
+REM ----------------------------------------------------------------------------
+:dev
+cd /d "%ROOT%"
+where node >nul 2>nul
+if not errorlevel 1 goto :dev_run
+echo [ERROR] Node.js not found on PATH. Install Node.js 20+ from https://nodejs.org
+exit /b 1
+
+:dev_run
+echo [INFO]  Starting dev mode - frontend watch + engine
+call npm run dev
+exit /b %ERRORLEVEL%
+
+REM ----------------------------------------------------------------------------
+REM Build engine + frontend
+REM ----------------------------------------------------------------------------
+:build
+where cmake >nul 2>nul
+if errorlevel 1 goto :build_no_cmake
+echo [INFO]  Building engine...
+cmake -S "%ROOT%\engine" -B "%ROOT%\engine\build"
+if errorlevel 1 exit /b 1
+cmake --build "%ROOT%\engine\build" --config Release
+if errorlevel 1 exit /b 1
+goto :build_frontend
+
+:build_no_cmake
+echo [WARN]  CMake not found - skipping the engine build.
+echo         Install CMake from https://cmake.org to build the engine.
+
+:build_frontend
+cd /d "%ROOT%"
+if not exist node_modules (
+    echo [INFO]  Installing dependencies...
+    call npm install
+    if errorlevel 1 exit /b 1
+)
+echo [INFO]  Building frontend...
+cd /d "%ROOT%\frontend"
+call npm run build
+if errorlevel 1 exit /b 1
+echo [OK]    Build complete - run "arx.bat" to start.
+exit /b 0
+
+REM ----------------------------------------------------------------------------
+REM Tests
+REM ----------------------------------------------------------------------------
+:test
+cd /d "%ROOT%\frontend"
+if not exist node_modules (
+    cd /d "%ROOT%"
+    if not exist node_modules (
+        echo [INFO]  Installing dependencies...
+        call npm install
+        if errorlevel 1 exit /b 1
+    )
+    cd /d "%ROOT%\frontend"
+)
+call npm test
+exit /b %ERRORLEVEL%
+
+REM ----------------------------------------------------------------------------
+REM Clean
+REM ----------------------------------------------------------------------------
+:clean
+if exist "%ROOT%\frontend\dist" rmdir /s /q "%ROOT%\frontend\dist"
+if exist "%ROOT%\engine\build" rmdir /s /q "%ROOT%\engine\build"
+echo [OK]    Build artifacts removed.
+exit /b 0
