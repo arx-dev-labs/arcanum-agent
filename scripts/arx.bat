@@ -50,10 +50,8 @@ echo             arx.bat --build
 exit /b 1
 
 :run_engine
-where node >nul 2>nul
-if not errorlevel 1 goto :run_go
-echo [ERROR] Node.js not found on PATH. Install Node.js 20+ from https://nodejs.org
-exit /b 1
+call :ensure_node
+if errorlevel 1 exit /b 1
 
 :run_go
 set "ARX_ENGINE_BIN="
@@ -66,7 +64,7 @@ goto :run_tui
 :run_tui
 if defined ARX_ENGINE_BIN echo [INFO]  Engine detected: %ARX_ENGINE_BIN%
 cd /d "%ROOT%\frontend"
-node "%ROOT%\frontend\dist\cli.js"
+"%NODE_EXE%" "%ROOT%\frontend\dist\cli.js"
 exit /b %ERRORLEVEL%
 
 REM ----------------------------------------------------------------------------
@@ -74,10 +72,8 @@ REM Development mode (hot reload)
 REM ----------------------------------------------------------------------------
 :dev
 cd /d "%ROOT%"
-where node >nul 2>nul
-if not errorlevel 1 goto :dev_run
-echo [ERROR] Node.js not found on PATH. Install Node.js 20+ from https://nodejs.org
-exit /b 1
+call :ensure_node
+if errorlevel 1 exit /b 1
 
 :dev_run
 echo [INFO]  Starting dev mode - frontend watch + engine
@@ -88,6 +84,8 @@ REM ----------------------------------------------------------------------------
 REM Build engine + frontend
 REM ----------------------------------------------------------------------------
 :build
+call :ensure_node
+if errorlevel 1 exit /b 1
 where cmake >nul 2>nul
 if errorlevel 1 goto :build_no_cmake
 echo [INFO]  Building engine...
@@ -119,6 +117,8 @@ REM ----------------------------------------------------------------------------
 REM Tests
 REM ----------------------------------------------------------------------------
 :test
+call :ensure_node
+if errorlevel 1 exit /b 1
 cd /d "%ROOT%\frontend"
 if not exist node_modules (
     cd /d "%ROOT%"
@@ -131,6 +131,34 @@ if not exist node_modules (
 )
 call npm test
 exit /b %ERRORLEVEL%
+
+REM ----------------------------------------------------------------------------
+REM Node.js helpers (probe common install locations when "node" is off-PATH)
+REM ----------------------------------------------------------------------------
+:ensure_node
+set "NODE_EXE=node"
+where node >nul 2>nul
+if not errorlevel 1 exit /b 0
+set "NODE_EXE="
+call :probe_node
+if not defined NODE_EXE (
+    echo [ERROR] Node.js not found on PATH or in common install locations:
+    echo             %ProgramFiles%\nodejs\node.exe
+    echo             %ProgramW6432%\nodejs\node.exe
+    echo             %USERPROFILE%\scoop\apps\nodejs\current\node.exe
+    echo         Install Node.js 20+ from https://nodejs.org
+    exit /b 1
+)
+for %%d in ("%NODE_EXE%") do set "Path=%%~dpd;%Path%"
+exit /b 0
+
+:probe_node
+for %%p in (
+    "%ProgramFiles%\nodejs\node.exe"
+    "%ProgramW6432%\nodejs\node.exe"
+    "%USERPROFILE%\scoop\apps\nodejs\current\node.exe"
+) do if exist %%p set "NODE_EXE=%%~p"
+exit /b 0
 
 REM ----------------------------------------------------------------------------
 REM Clean
