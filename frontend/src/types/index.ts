@@ -1,27 +1,10 @@
 // Core types for Arcanum Agent
 
-export type MessageType =
-  | 'log'
-  | 'progress'
-  | 'result'
-  | 'error'
-  | 'event'
-  | 'stream_chunk'
-  | 'tool_call'
-  | 'tool_result';
+// The wire protocol is numeric (see protocol.ts / engine.hpp). The legacy
+// string union was kept only for backwards compatibility of imports.
+export type MessageType = number;
 
-export type RequestType =
-  | 'chat_completion'
-  | 'tool_execute'
-  | 'file_read'
-  | 'file_write'
-  | 'file_list'
-  | 'shell_execute'
-  | 'http_request'
-  | 'ws_connect'
-  | 'sse_connect'
-  | 'plugin_call'
-  | 'agent_run';
+export type RequestType = number;
 
 export interface BaseMessage {
   type: MessageType;
@@ -139,11 +122,12 @@ export interface Conversation {
 
 export interface UIMessage {
   id: string;
-  role: 'system' | 'user' | 'assistant' | 'tool' | 'system';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
   streaming?: boolean;
   tool_calls?: ToolCall[];
   tool_results?: ToolResult[];
+  tool_call_id?: string;
   timestamp: number;
   metadata?: Record<string, unknown>;
 }
@@ -189,3 +173,6 @@ export interface Theme {
     accent: string;
   };
 }
+
+// Re-export the concrete theme names (defined in ../theme) for convenience.
+export type { ThemeName } from '../theme';

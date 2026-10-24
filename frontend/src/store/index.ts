@@ -32,6 +32,7 @@ interface ArcanumStore extends AgentState {
   addMessage: (conversationId: string, message: UIMessage) => void;
   updateMessage: (conversationId: string, messageId: string, updates: Partial<UIMessage>) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
+  clearMessages: (conversationId: string) => void;
 
   // Providers
   setProviders: (providers: Provider[]) => void;
@@ -65,137 +66,181 @@ const initialState: AgentState = {
 };
 
 export const useStore = create<ArcanumStore>()(
-  subscribeWithSelector((set, get) => ({
-    ...initialState,
-    theme: getTheme('cyberpunk'),
-    themeName: 'cyberpunk',
+  subscribeWithSelector((set, get) => {
+    // Lazy initialize theme to avoid module evaluation order issues
+    let initialTheme: Theme;
+    try {
+      initialTheme = getTheme('cyberpunk');
+    } catch {
+      // Fallback theme
+      initialTheme = {
+        name: 'Cyberpunk',
+        colors: {
+          primary: '#00ffff',
+          secondary: '#ff00ff',
+          accent: '#ffff00',
+          background: '#0a0a12',
+          surface: '#12121f',
+          text: '#e0e0ff',
+          text_muted: '#6a6a8a',
+          border: '#00ffff44',
+          success: '#00ff88',
+          warning: '#ffaa00',
+          error: '#ff3366',
+          info: '#00ccff',
+        },
+        gradients: {
+          primary: 'linear-gradient(135deg, #00ffff 0%, #ff00ff 100%)',
+          secondary: 'linear-gradient(135deg, #12121f 0%, #1a1a2e 100%)',
+          accent: 'linear-gradient(90deg, #ff00ff 0%, #ffff00 100%)',
+        },
+      };
+    }
+    
+    return {
+      ...initialState,
+      theme: initialTheme,
+      themeName: 'cyberpunk',
 
-    // Theme
-    setTheme: (name: ThemeName) => set({ themeName: name, theme: getTheme(name) }),
+      // Theme
+      setTheme: (name: ThemeName) => set({ themeName: name, theme: getTheme(name) }),
 
-    // Engine
-    setEngineConnected: (connected: boolean) => set({ engine_connected: connected }),
-    setEngineStatus: (status: AgentState['engine_status']) => set({ engine_status: status }),
+      // Engine
+      setEngineConnected: (connected: boolean) => set({ engine_connected: connected }),
+      setEngineStatus: (status: AgentState['engine_status']) => set({ engine_status: status }),
 
-    // Conversations
-    addConversation: (conv: Conversation) =>
-      set((state) => ({
-        conversations: [conv, ...state.conversations],
-        current_conversation: state.current_conversation || conv,
-      })),
+      // Conversations
+      addConversation: (conv: Conversation) =>
+        set((state) => ({
+          conversations: [conv, ...state.conversations],
+          current_conversation: state.current_conversation || conv,
+        })),
 
-    removeConversation: (id: string) =>
-      set((state) => ({
-        conversations: state.conversations.filter((c) => c.id !== id),
-        current_conversation:
-          state.current_conversation?.id === id ? null : state.current_conversation,
-      })),
+      removeConversation: (id: string) =>
+        set((state) => ({
+          conversations: state.conversations.filter((c) => c.id !== id),
+          current_conversation:
+            state.current_conversation?.id === id ? null : state.current_conversation,
+        })),
 
-    setCurrentConversation: (id: string | null) =>
-      set((state) => ({
-        current_conversation: id
-          ? state.conversations.find((c) => c.id === id) || null
-          : null,
-      })),
+      setCurrentConversation: (id: string | null) =>
+        set((state) => ({
+          current_conversation: id
+            ? state.conversations.find((c) => c.id === id) || null
+            : null,
+        })),
 
-    updateConversation: (id: string, updates: Partial<Conversation>) =>
-      set((state) => ({
-        conversations: state.conversations.map((c) =>
-          c.id === id ? { ...c, ...updates, updated_at: Date.now() } : c
-        ),
-        current_conversation:
-          state.current_conversation?.id === id
-            ? { ...state.current_conversation, ...updates, updated_at: Date.now() }
-            : state.current_conversation,
-      })),
+      updateConversation: (id: string, updates: Partial<Conversation>) =>
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, ...updates, updated_at: Date.now() } : c
+          ),
+          current_conversation:
+            state.current_conversation?.id === id
+              ? { ...state.current_conversation, ...updates, updated_at: Date.now() }
+              : state.current_conversation,
+        })),
 
-    addMessage: (conversationId: string, message: UIMessage) =>
-      set((state) => ({
-        conversations: state.conversations.map((c) =>
-          c.id === conversationId
-            ? { ...c, messages: [...c.messages, message], updated_at: Date.now() }
-            : c
-        ),
-        current_conversation:
-          state.current_conversation?.id === conversationId
-            ? {
-                ...state.current_conversation,
-                messages: [...state.current_conversation.messages, message],
-                updated_at: Date.now(),
-              }
-            : state.current_conversation,
-      })),
+      addMessage: (conversationId: string, message: UIMessage) =>
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === conversationId
+              ? { ...c, messages: [...c.messages, message], updated_at: Date.now() }
+              : c
+          ),
+          current_conversation:
+            state.current_conversation?.id === conversationId
+              ? {
+                  ...state.current_conversation,
+                  messages: [...state.current_conversation.messages, message],
+                  updated_at: Date.now(),
+                }
+              : state.current_conversation,
+        })),
 
-    updateMessage: (conversationId: string, messageId: string, updates: Partial<UIMessage>) =>
-      set((state) => ({
-        conversations: state.conversations.map((c) =>
-          c.id === conversationId
-            ? {
-                ...c,
-                messages: c.messages.map((m) =>
-                  m.id === messageId ? { ...m, ...updates } : m
-                ),
-              }
-            : c
-        ),
-        current_conversation:
-          state.current_conversation?.id === conversationId
-            ? {
-                ...state.current_conversation,
-                messages: state.current_conversation.messages.map((m) =>
-                  m.id === messageId ? { ...m, ...updates } : m
-                ),
-              }
-            : state.current_conversation,
-      })),
+      updateMessage: (conversationId: string, messageId: string, updates: Partial<UIMessage>) =>
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === conversationId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === messageId ? { ...m, ...updates } : m
+                  ),
+                }
+              : c
+          ),
+          current_conversation:
+            state.current_conversation?.id === conversationId
+              ? {
+                  ...state.current_conversation,
+                  messages: state.current_conversation.messages.map((m) =>
+                    m.id === messageId ? { ...m, ...updates } : m
+                  ),
+                }
+              : state.current_conversation,
+        })),
 
-    deleteMessage: (conversationId: string, messageId: string) =>
-      set((state) => ({
-        conversations: state.conversations.map((c) =>
-          c.id === conversationId
-            ? { ...c, messages: c.messages.filter((m) => m.id !== messageId) }
-            : c
-        ),
-        current_conversation:
-          state.current_conversation?.id === conversationId
-            ? {
-                ...state.current_conversation,
-                messages: state.current_conversation.messages.filter((m) => m.id !== messageId),
-              }
-            : state.current_conversation,
-      })),
+      deleteMessage: (conversationId: string, messageId: string) =>
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === conversationId
+              ? { ...c, messages: c.messages.filter((m) => m.id !== messageId) }
+              : c
+          ),
+          current_conversation:
+            state.current_conversation?.id === conversationId
+              ? {
+                  ...state.current_conversation,
+                  messages: state.current_conversation.messages.filter((m) => m.id !== messageId),
+                }
+              : state.current_conversation,
+        })),
 
-    // Providers
-    setProviders: (providers: Provider[]) => set({ providers }),
-    addProvider: (provider: Provider) =>
-      set((state) => ({ providers: [...state.providers, provider] })),
-    updateProviderConfig: (name: string, config: Record<string, unknown>) =>
-      set((state) => ({
-        providers: state.providers.map((p) =>
-          p.name === name ? { ...p, config: { ...p.config, ...config } } : p
-        ),
-      })),
+      clearMessages: (conversationId: string) =>
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === conversationId ? { ...c, messages: [], updated_at: Date.now() } : c
+          ),
+          current_conversation:
+            state.current_conversation?.id === conversationId
+              ? { ...state.current_conversation, messages: [], updated_at: Date.now() }
+              : state.current_conversation,
+        })),
 
-    // Plugins
-    setPlugins: (plugins: Plugin[]) => set({ plugins }),
-    addPlugin: (plugin: Plugin) =>
-      set((state) => ({ plugins: [...state.plugins, plugin] })),
-    removePlugin: (name: string) =>
-      set((state) => ({ plugins: state.plugins.filter((p) => p.name !== name) })),
+      // Providers
+      setProviders: (providers: Provider[]) => set({ providers }),
+      addProvider: (provider: Provider) =>
+        set((state) => ({ providers: [...state.providers, provider] })),
+      updateProviderConfig: (name: string, config: Record<string, unknown>) =>
+        set((state) => ({
+          providers: state.providers.map((p) =>
+            p.name === name ? { ...p, config: { ...p.config, ...config } } : p
+          ),
+        })),
 
-    // Config
-    setConfig: (config: EngineConfig) => set({ config }),
+      // Plugins
+      setPlugins: (plugins: Plugin[]) => set({ plugins }),
+      addPlugin: (plugin: Plugin) =>
+        set((state) => ({ plugins: [...state.plugins, plugin] })),
+      removePlugin: (name: string) =>
+        set((state) => ({ plugins: state.plugins.filter((p) => p.name !== name) })),
 
-    // Agent status
-    setAgentStatus: (status: AgentState['status']) => set({ status }),
+      // Config
+      setConfig: (config: EngineConfig) => set({ config }),
 
-    // Reset
-    reset: () => set(initialState),
-  }))
+      // Agent status
+      setAgentStatus: (status: AgentState['status']) => set({ status }),
+
+      // Reset
+      reset: () => set(initialState),
+    };
+  })
 );
 
 // Selectors for performance
 export const selectTheme = (state: ArcanumStore) => state.theme;
+export const selectThemeName = (state: ArcanumStore) => state.themeName;
 export const selectCurrentConversation = (state: ArcanumStore) => state.current_conversation;
 export const selectConversations = (state: ArcanumStore) => state.conversations;
 export const selectProviders = (state: ArcanumStore) => state.providers;
@@ -203,10 +248,15 @@ export const selectPlugins = (state: ArcanumStore) => state.plugins;
 export const selectAgentStatus = (state: ArcanumStore) => state.status;
 export const selectEngineConnected = (state: ArcanumStore) => state.engine_connected;
 export const selectEngineStatus = (state: ArcanumStore) => state.engine_status;
+export const selectConfig = (state: ArcanumStore) => state.config;
 
 // Hook for subscribing to specific slices
 export function useTheme() {
   return useStore(selectTheme);
+}
+
+export function useThemeName() {
+  return useStore(selectThemeName);
 }
 
 export function useCurrentConversation() {
@@ -229,7 +279,14 @@ export function useAgentStatus() {
   return useStore(selectAgentStatus);
 }
 
-export function useEngineStatus() {
+export function useEngineConnected() {
   return useStore(selectEngineConnected);
+}
+
+export function useEngineStatus() {
   return useStore(selectEngineStatus);
+}
+
+export function useConfig() {
+  return useStore(selectConfig);
 }
