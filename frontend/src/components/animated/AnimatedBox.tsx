@@ -1,79 +1,20 @@
-// Animated Box component with entrance/exit animations
+// Animated components for Ink TUI
 
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import { useTheme } from '../store';
+import { useTheme } from '../../store';
 
-interface AnimatedBoxProps {
-  children: React.ReactNode;
-  animation?: 'fade' | 'slideUp' | 'slideDown' | 'slideLeft' | 'slideRight' | 'scale' | 'glitch';
-  duration?: number;
-  delay?: number;
-  direction?: 'in' | 'out';
-  style?: Record<string, unknown>;
-}
-
-export function AnimatedBox({
-  children,
-  animation = 'fade',
-  duration = 300,
-  delay = 0,
-  direction = 'in',
-  style = {},
-}: AnimatedBoxProps) {
-  const [visible, setVisible] = useState(direction === 'in');
-  const { theme } = useTheme();
-
-  useEffect(() => {
-    if (direction === 'in') {
-      const timer = setTimeout(() => setVisible(true), delay);
-      return () => clearTimeout(timer);
-    } else {
-      setVisible(false);
-    }
-  }, [direction, delay]);
-
-  if (!visible && direction === 'out') {
-    return null;
-  }
-
-  const animations: Record<string, string> = {
-    fade: visible ? 'opacity: 1' : 'opacity: 0',
-    slideUp: visible ? 'transform: translateY(0)' : 'transform: translateY(100%)',
-    slideDown: visible ? 'transform: translateY(0)' : 'transform: translateY(-100%)',
-    slideLeft: visible ? 'transform: translateX(0)' : 'transform: translateX(100%)',
-    slideRight: visible ? 'transform: translateX(0)' : 'transform: translateX(-100%)',
-    scale: visible ? 'transform: scale(1)' : 'transform: scale(0.95)',
-    glitch: visible ? 'opacity: 1' : 'opacity: 0',
-  };
-
-  const animationStyle = animations[animation] || animations.fade;
-
-  return (
-    <Box
-      style={{
-        ...style,
-        transition: `all ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`,
-        opacity: animation === 'fade' ? (visible ? 1 : 0) : 1,
-      }}
-    >
-      {children}
-    </Box>
-  );
-}
-
-// Animated Text with typing effect
+// Typing Text with typewriter effect
 interface TypingTextProps {
   text: string;
   speed?: number;
   onComplete?: () => void;
-  style?: Record<string, unknown>;
 }
 
-export function TypingText({ text, speed = 30, onComplete, style = {} }: TypingTextProps) {
+export function TypingText({ text, speed = 30, onComplete }: TypingTextProps) {
   const [displayedText, setDisplayedText] = useState('');
   const [index, setIndex] = useState(0);
-  const { theme } = useTheme();
+  const theme = useTheme();
 
   useEffect(() => {
     if (index < text.length) {
@@ -93,61 +34,56 @@ export function TypingText({ text, speed = 30, onComplete, style = {} }: TypingT
     setIndex(0);
   }, [text]);
 
-  return <Text style={{ ...style, color: theme.colors.text }}>{displayedText}</Text>;
+  return <Text color={theme.colors.text}>{displayedText}</Text>;
 }
 
-// Gradient Text
+// Gradient Text - using ink-gradient approach
 interface GradientTextProps {
   children: React.ReactNode;
   colors?: string[];
-  animation?: boolean;
-  style?: Record<string, unknown>;
+  dimColor?: boolean;
+  bold?: boolean;
 }
 
-export function GradientText({ children, colors, animation = true, style = {} }: GradientTextProps) {
-  const { theme } = useTheme();
+export function GradientText({ children, colors, dimColor, bold = true }: GradientTextProps) {
+  const theme = useTheme();
   const gradientColors = colors || [theme.colors.primary, theme.colors.secondary, theme.colors.accent];
 
+  // For Ink, we can't do CSS gradients. We'll use alternating colors for each character
+  // or use the first color as a simple approach
+  const color = gradientColors[0];
+
   return (
-    <Text
-      style={{
-        ...style,
-        background: `linear-gradient(90deg, ${gradientColors.join(', ')})`,
-        backgroundClip: 'text',
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-        animation: animation ? 'gradient-shift 3s ease infinite' : undefined,
-        backgroundSize: '200% 200%',
-      }}
-    >
+    <Text color={color} bold={bold} dimColor={dimColor}>
       {children}
     </Text>
   );
 }
 
-// Pulsing/breathing animation
+// Pulsing/breathing animation using blink
 interface PulseProps {
   children: React.ReactNode;
   color?: string;
   speed?: number;
-  style?: Record<string, unknown>;
 }
 
-export function Pulse({ children, color, speed = 1000, style = {} }: PulseProps) {
-  const { theme } = useTheme();
+export function Pulse({ children, color, speed = 1000 }: PulseProps) {
+  const theme = useTheme();
   const pulseColor = color || theme.colors.primary;
+  const [visible, setVisible] = useState(true);
 
-  return (
-    <Text
-      style={{
-        ...style,
-        color: pulseColor,
-        animation: `pulse ${speed}ms ease-in-out infinite`,
-      }}
-    >
-      {children}
-    </Text>
-  );
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVisible((v) => !v);
+    }, speed);
+    return () => clearInterval(interval);
+  }, [speed]);
+
+  if (!visible) {
+    return <Text color={pulseColor} dimColor>{' '}</Text>;
+  }
+
+  return <Text color={pulseColor} bold>{children}</Text>;
 }
 
 // Spinner with custom frames
@@ -155,7 +91,6 @@ interface SpinnerProps {
   type?: 'dots' | 'line' | 'pipe' | 'bouncingBar' | 'bouncingBall' | 'earth' | 'moon' | 'clock' | 'hearts';
   color?: string;
   text?: string;
-  style?: Record<string, unknown>;
 }
 
 const spinners = {
@@ -170,8 +105,8 @@ const spinners = {
   hearts: ['💖', '💗', '💓', '💗', '💖'],
 };
 
-export function Spinner({ type = 'dots', color, text, style = {} }: SpinnerProps) {
-  const { theme } = useTheme();
+export function Spinner({ type = 'dots', color, text }: SpinnerProps) {
+  const theme = useTheme();
   const frames = spinners[type];
   const [frameIndex, setFrameIndex] = useState(0);
 
@@ -185,9 +120,9 @@ export function Spinner({ type = 'dots', color, text, style = {} }: SpinnerProps
   const spinnerColor = color || theme.colors.primary;
 
   return (
-    <Box style={{ ...style, flexDirection: 'row', alignItems: 'center', gap: 1 }}>
-      <Text style={{ color: spinnerColor }}>{frames[frameIndex]}</Text>
-      {text && <Text style={{ color: theme.colors.text_muted }}>{text}</Text>}
+    <Box flexDirection="row" alignItems="center" gap={1}>
+      <Text color={spinnerColor}>{frames[frameIndex]}</Text>
+      {text && <Text color={theme.colors.text_muted} dimColor>{text}</Text>}
     </Box>
   );
 }
@@ -199,8 +134,7 @@ interface ProgressBarProps {
   width?: number;
   showPercent?: boolean;
   color?: string;
-  backgroundColor?: string;
-  style?: Record<string, unknown>;
+  trackColor?: string;
 }
 
 export function ProgressBar({
@@ -209,25 +143,24 @@ export function ProgressBar({
   width = 40,
   showPercent = true,
   color,
-  backgroundColor,
-  style = {},
+  trackColor,
 }: ProgressBarProps) {
-  const { theme } = useTheme();
+  const theme = useTheme();
   const percent = Math.min(100, Math.max(0, (value / max) * 100));
   const filled = Math.round((percent / 100) * width);
   const empty = width - filled;
 
   const barColor = color || theme.colors.primary;
-  const bgColor = backgroundColor || theme.colors.border;
+  const bgColor = trackColor || theme.colors.border;
 
   const filledBar = '█'.repeat(filled);
   const emptyBar = '░'.repeat(empty);
 
   return (
-    <Box style={{ ...style, flexDirection: 'row', alignItems: 'center', gap: 1 }}>
-      <Text style={{ color: barColor }}>{filledBar}</Text>
-      <Text style={{ color: bgColor }}>{emptyBar}</Text>
-      {showPercent && <Text style={{ color: theme.colors.text_muted, marginLeft: 1 }}>{Math.round(percent)}%</Text>}
+    <Box flexDirection="row" alignItems="center" gap={1}>
+      <Text color={barColor}>{filledBar}</Text>
+      <Text color={bgColor}>{emptyBar}</Text>
+      {showPercent && <Text color={theme.colors.text_muted} dimColor>{Math.round(percent)}%</Text>}
     </Box>
   );
 }
@@ -237,11 +170,10 @@ interface GlitchTextProps {
   text: string;
   intensity?: 'low' | 'medium' | 'high';
   color?: string;
-  style?: Record<string, unknown>;
 }
 
-export function GlitchText({ text, intensity = 'medium', color, style = {} }: GlitchTextProps) {
-  const { theme } = useTheme();
+export function GlitchText({ text, intensity = 'medium', color }: GlitchTextProps) {
+  const theme = useTheme();
   const glitchColor = color || theme.colors.primary;
   const [glitch, setGlitch] = useState(false);
 
@@ -260,44 +192,28 @@ export function GlitchText({ text, intensity = 'medium', color, style = {} }: Gl
   }, [intensity]);
 
   return (
-    <Text
-      style={{
-        ...style,
-        color: glitch ? theme.colors.error : glitchColor,
-        textDecoration: glitch ? 'line-through' : 'none',
-        transform: glitch ? 'skewX(-10deg)' : 'none',
-      }}
-    >
+    <Text color={glitch ? theme.colors.error : glitchColor} bold={glitch}>
       {text}
     </Text>
   );
 }
 
-// Floating/levitating animation
+// Floating animation (placeholder - not really possible in terminal)
 interface FloatProps {
   children: React.ReactNode;
-  amplitude?: number;
-  speed?: number;
-  style?: Record<string, unknown>;
 }
 
-export function Float({ children, amplitude = 1, speed = 2000, style = {} }: FloatProps) {
-  const [offset, setOffset] = useState(0);
+export function Float({ children }: FloatProps) {
+  return <Box>{children}</Box>;
+}
 
-  useEffect(() => {
-    let frame = 0;
-    const animate = () => {
-      frame += 0.05;
-      setOffset(Math.sin(frame) * amplitude);
-      requestAnimationFrame(animate);
-    };
-    const id = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(id);
-  }, [amplitude, speed]);
+// Simple fade in/out
+interface FadeProps {
+  children: React.ReactNode;
+  visible: boolean;
+}
 
-  return (
-    <Box style={{ ...style, transform: `translateY(${offset}px)` }}>
-      {children}
-    </Box>
-  );
+export function Fade({ children, visible }: FadeProps) {
+  if (!visible) return null;
+  return <Box>{children}</Box>;
 }

@@ -7,16 +7,19 @@ import {
   useInput,
   useStdout,
   render,
-  Color,
 } from 'ink';
-import { GradientText, AnimatedBox, Spinner, Pulse } from './components/animated/AnimatedBox';
+import { GradientText, Spinner, Pulse, Fade } from './components/animated/AnimatedBox';
 import { Sidebar } from './components/layout/Sidebar';
-import { Message, Input, WelcomeBanner, StatusBar, CommandPalette } from './components/chat/Message';
+import { Message, WelcomeBanner, StatusBar, CommandPalette } from './components/chat/Message';
+import { Input } from './components/chat/Input';
 import { useStore } from './store';
 import { useEngine } from './hooks/useEngine';
 import { themes, type ThemeName } from './theme';
-import type { Conversation, UIMessage } from './types';
+import type { ChatMessage, Conversation, UIMessage } from './types';
 import { v4 as uuidv4 } from 'uuid';
+import { writeFileSync, mkdirSync } from 'fs';
+import path from 'path';
+import os from 'os';
 
 const VERSION = '1.0.0';
 
@@ -35,18 +38,19 @@ export function App() {
     removeConversation,
     addMessage,
     updateMessage,
+    updateConversation,
+    clearMessages,
     setProviders,
     setEngineConnected,
     setEngineStatus,
     setAgentStatus,
   } = useStore();
 
-  const { connected, engineReady, chatCompletion, request } = useEngine();
+  const { connected, engineReady, engineError, chatCompletion, listProviders } = useEngine();
   const [activeTab, setActiveTab] = useState<'conversations' | 'providers' | 'plugins' | 'settings'>('conversations');
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(35);
-  const [resizeMode, setResizeMode] = useState(false);
 
   // Initialize engine connection
   useEffect(() => {
@@ -56,13 +60,18 @@ export function App() {
 
   // Load providers on connect
   useEffect(() => {
-    if (engineReady) {
-      // Request providers from engine
-      request('provider_list', {}).then((result: any) => {
+    if (!engineReady) return;
+    let cancelled = false;
+
+    listProviders()
+      .then((result) => {
+        if (cancelled) return;
         if (result.providers) {
-          setProviders(result.providers);
+          setProviders(result.providers as any);
         }
-      }).catch(() => {
+      })
+      .catch(() => {
+        if (cancelled) return;
         // Fallback to defaults
         setProviders([
           { name: 'openai', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'], config: {} },
@@ -71,32 +80,38 @@ export function App() {
           { name: 'custom', models: [], config: {} },
         ]);
       });
-    }
-  }, [engineReady, request, setProviders]);
 
-  // Handle keyboard shortcuts
+    return () => {
+      cancelled = true;
+    };
+  }, [engineReady, listProviders, setProviders]);
+
+  // Handle keyboard shortcuts (ink's Key type only exposes modifiers/special
+  // keys, so plain characters arrive through `input`).
   useInput((input, key) => {
     if (commandPaletteOpen) return;
 
+    const withModifier = key.meta || key.ctrl;
+
     // Command palette
-    if (key.p && (key.meta || key.ctrl)) {
+    if (input === 'p' && withModifier) {
       setCommandPaletteOpen(true);
       return;
     }
 
     // New conversation
-    if (key.n && (key.meta || key.ctrl)) {
+    if (input === 'n' && withModifier) {
       handleNewConversation();
       return;
     }
 
     // Quit
-    if (key.q && (key.meta || key.ctrl)) {
+    if (input === 'q' && withModifier) {
       process.exit(0);
     }
 
     // Settings
-    if (key.comma && (key.meta || key.ctrl)) {
+    if (input === ',' && withModifier) {
       setActiveTab('settings');
       return;
     }
@@ -110,7 +125,7 @@ export function App() {
     }
 
     // Theme switching
-    if (key.t && (key.meta || key.ctrl)) {
+    if (input === 't' && withModifier) {
       const themeNames = Object.keys(themes) as ThemeName[];
       const currentIndex = themeNames.indexOf(themeName);
       setTheme(themeNames[(currentIndex + 1) % themeNames.length]);
@@ -158,6 +173,12 @@ export function App() {
   const handleSendMessage = useCallback(async (text: string) => {
     if (!current_conversation) return;
 
+    // Slash commands are handled locally, everything else goes to the engine.
+    if (text.startsWith('/')) {
+      await handleSlashCommand(text);
+      return;
+    }
+
     // Add user message
     const userMsg: UIMessage = {
       id: uuidv4(),
@@ -168,27 +189,46 @@ export function App() {
     addMessage(current_conversation.id, userMsg);
 
     // Prepare messages for API
-    const messages = current_conversation.messages
+    const messages: ChatMessage[] = current_conversation.messages
       .filter(m => m.role !== 'system' || m.content)
-      .map(m => ({
-        role: m.role,
-        content: m.content,
-        ...(m.tool_calls && { tool_calls: m.tool_calls }),
-        ...(m.tool_call_id && { tool_call_id: m.tool_call_id }),
-      }));
+      .map(m => {
+        const msg: ChatMessage = { role: m.role, content: m.content };
+        if (m.tool_calls) msg.tool_calls = m.tool_calls;
+        if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
+        return msg;
+      });
 
     messages.push({ role: 'user', content: text });
 
-    // Send to engine
-    setAgentStatus('thinking');
+    if (!engineReady) {
+      setAgentStatus('error');
+      const errorMsg: UIMessage = {
+        id: uuidv4(),
+        role: 'system',
+        content: engineError
+          ? `Engine unavailable: ${engineError}`
+          : 'Engine is not ready yet. Please wait or restart the app.',
+        timestamp: Date.now(),
+        metadata: { error: true },
+      };
+      addMessage(current_conversation.id, errorMsg);
+      return;
+    }
+
+    // Send to engine - the promise resolves only when the engine finishes the
+    // response, so errors/timeouts are reported to the user here.
     try {
-      await chatCompletion({
-        model: current_conversation.model || 'auto',
-        messages: messages as any,
-        stream: true,
-        temperature: 0.7,
-        max_tokens: 4096,
-      });
+      await chatCompletion(
+        {
+          model: current_conversation.model || 'auto',
+          messages: messages as any,
+          stream: true,
+          temperature: 0.7,
+          max_tokens: 4096,
+        },
+        current_conversation.id
+      );
+      setAgentStatus('idle');
     } catch (error) {
       setAgentStatus('error');
       // Add error message
@@ -201,61 +241,226 @@ export function App() {
       };
       addMessage(current_conversation.id, errorMsg);
     }
-  }, [current_conversation, addMessage, chatCompletion, setAgentStatus]);
+  }, [current_conversation, addMessage, chatCompletion, engineError, engineReady, setAgentStatus]);
+
+  const handleSlashCommand = useCallback(
+    async (text: string) => {
+      const [command, ...args] = text.slice(1).split(/\s+/);
+      const arg = args.join(' ').trim();
+
+      switch (command) {
+        case 'new': {
+          handleNewConversation();
+          break;
+        }
+        case 'clear': {
+          if (current_conversation) {
+            clearMessages(current_conversation.id);
+            setAgentStatus('idle');
+          }
+          break;
+        }
+        case 'model': {
+          if (!current_conversation) break;
+          if (!arg) {
+            addMessage(current_conversation.id, {
+              id: uuidv4(),
+              role: 'system',
+              content: `Current model: ${current_conversation.model}. Usage: /model <name>`,
+              timestamp: Date.now(),
+            });
+          } else {
+            updateConversation(current_conversation.id, { model: arg });
+          }
+          break;
+        }
+        case 'provider': {
+          if (!current_conversation) break;
+          if (!arg) {
+            addMessage(current_conversation.id, {
+              id: uuidv4(),
+              role: 'system',
+              content: `Current provider: ${current_conversation.provider}. Usage: /provider <name>`,
+              timestamp: Date.now(),
+            });
+          } else {
+            updateConversation(current_conversation.id, { provider: arg });
+          }
+          break;
+        }
+        case 'theme': {
+          if (arg && arg in themes) {
+            setTheme(arg as ThemeName);
+          } else if (current_conversation) {
+            addMessage(current_conversation.id, {
+              id: uuidv4(),
+              role: 'system',
+              content: `Unknown theme "${arg}". Available: ${Object.keys(themes).join(', ')}`,
+              timestamp: Date.now(),
+            });
+          }
+          break;
+        }
+        case 'export': {
+          if (current_conversation) exportConversation(current_conversation);
+          break;
+        }
+        case 'plugins':
+        case 'settings': {
+          setActiveTab(command === 'plugins' ? 'plugins' : 'settings');
+          break;
+        }
+        case 'compact': {
+          addMessage(current_conversation!.id, {
+            id: uuidv4(),
+            role: 'system',
+            content: 'Compact mode is not available in this build.',
+            timestamp: Date.now(),
+          });
+          break;
+        }
+        default: {
+          if (!current_conversation) break;
+          addMessage(current_conversation.id, {
+            id: uuidv4(),
+            role: 'system',
+            content: `Unknown command: /${command}. Type /help to see the available commands.`,
+            timestamp: Date.now(),
+          });
+          break;
+        }
+      }
+    },
+    [addMessage, clearMessages, current_conversation, handleNewConversation, setActiveTab, setAgentStatus, setTheme, updateConversation]
+  );
+
+  const exportConversation = useCallback((conversation: Conversation) => {
+    try {
+      const dir = path.join(os.homedir(), '.arx', 'exports');
+      mkdirSync(dir, { recursive: true });
+      const file = path.join(dir, `${conversation.id}.md`);
+      const body = [
+        `# ${conversation.title}`,
+        '',
+        ...conversation.messages.map((m) => `**${m.role}**: ${m.content}`),
+        '',
+      ].join('\n');
+      writeFileSync(file, body, 'utf-8');
+      addMessage(conversation.id, {
+        id: uuidv4(),
+        role: 'system',
+        content: `Conversation exported to ${file}`,
+        timestamp: Date.now(),
+      });
+    } catch (error) {
+      addMessage(conversation.id, {
+        id: uuidv4(),
+        role: 'system',
+        content: `Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: Date.now(),
+        metadata: { error: true },
+      });
+    }
+  }, [addMessage]);
 
   const handleCommand = useCallback((command: string) => {
     switch (command) {
-      case 'new-chat':
+      case 'new-chat': {
         handleNewConversation();
         break;
+      }
       case 'switch-model':
+      case 'switch-provider': {
         setActiveTab('providers');
         break;
-      case 'switch-provider':
-        setActiveTab('providers');
-        break;
-      case 'switch-theme':
+      }
+      case 'switch-theme': {
         const themeNames = Object.keys(themes) as ThemeName[];
         const currentIndex = themeNames.indexOf(themeName);
         setTheme(themeNames[(currentIndex + 1) % themeNames.length]);
         break;
-      case 'settings':
+      }
+      case 'settings': {
         setActiveTab('settings');
         break;
-      case 'plugins':
+      }
+      case 'plugins': {
         setActiveTab('plugins');
         break;
-      case 'clear-history':
+      }
+      case 'clear-history': {
         if (current_conversation) {
-          // Clear messages but keep conversation
+          clearMessages(current_conversation.id);
+          setAgentStatus('idle');
         }
         break;
-      case 'help':
-        // Show help
+      }
+      case 'export': {
+        if (current_conversation) exportConversation(current_conversation);
         break;
-      case 'quit':
+      }
+      case 'help': {
+        const target = current_conversation ?? conversations[0];
+        if (target) {
+          addMessage(target.id, {
+            id: uuidv4(),
+            role: 'system',
+            content: [
+              'Keyboard:',
+              '  Ctrl+N new chat  |  Ctrl+P palette  |  Ctrl+T theme  |  Ctrl+Q quit',
+              'Slash commands:',
+              '  /new /clear /help /export /model <name> /provider <name> /theme <name>',
+              '  /plugins /settings',
+            ].join('\n'),
+            timestamp: Date.now(),
+          });
+        }
+        break;
+      }
+      case 'quit': {
         process.exit(0);
+      }
     }
     setCommandPaletteOpen(false);
-  }, [handleNewConversation, setActiveTab, themeName, setTheme, current_conversation]);
+  }, [
+    addMessage,
+    clearMessages,
+    conversations,
+    current_conversation,
+    exportConversation,
+    handleNewConversation,
+    setActiveTab,
+    setAgentStatus,
+    setTheme,
+    themeName,
+  ]);
 
   // Render
   const currentModel = current_conversation?.model || 'auto';
   const currentProvider = current_conversation?.provider || 'auto';
 
   return (
-    <Box flexDirection="column" height="100%" backgroundColor={theme.colors.background}>
+    <Box flexDirection="column" height="100%">
       {/* Welcome Banner */}
       {showWelcome && conversations.length === 0 && (
-        <AnimatedBox animation="slideDown" duration={500}>
+        <Fade visible={true}>
           <WelcomeBanner version={VERSION} themeName={themeName} />
-        </AnimatedBox>
+        </Fade>
+      )}
+
+      {/* Engine availability notice */}
+      {engineError && (
+        <Box paddingX={1}>
+          <Text color={theme.colors.error}>
+            ⚠ Engine: {engineError}
+          </Text>
+        </Box>
       )}
 
       {/* Main Content Area */}
-      <Box flex="1" flexDirection="row" minHeight={0}>
+      <Box flexGrow={1} flexDirection="row" minHeight={0}>
         {/* Sidebar */}
-        <AnimatedBox animation="slideLeft" duration={300}>
+        <Fade visible={true}>
           <Sidebar
             activeTab={activeTab}
             onTabChange={setActiveTab}
@@ -264,23 +469,19 @@ export function App() {
             onNewConversation={handleNewConversation}
             width={sidebarWidth}
           />
-        </AnimatedBox>
+        </Fade>
 
         {/* Resize Handle */}
         <Box
           width={1}
-          backgroundColor={resizeMode ? theme.colors.primary : theme.colors.border}
-          onMouseDown={() => setResizeMode(true)}
-          onMouseUp={() => setResizeMode(false)}
-          onMouseLeave={() => setResizeMode(false)}
         >
-          <Text style={{ color: theme.colors.text_muted }}>│</Text>
+          <Text color={theme.colors.text_muted} dimColor>│</Text>
         </Box>
 
         {/* Chat Area */}
-        <Box flex="1" flexDirection="column" minWidth={0} minHeight={0}>
+        <Box flexGrow={1} flexDirection="column" minWidth={0} minHeight={0}>
           {/* Messages */}
-          <Box flex="1" overflowY="auto" padding={1} paddingBottom={0}>
+          <Box flexGrow={1} padding={1} paddingBottom={0}>
             {current_conversation && !showWelcome ? (
               <Box flexDirection="column">
                 {current_conversation.messages.map((msg, index) => (
@@ -297,11 +498,11 @@ export function App() {
                 )}
               </Box>
             ) : (
-              <Box flex="1" flexDirection="column" alignItems="center" justifyContent="center">
+              <Box flexGrow={1} flexDirection="column" alignItems="center" justifyContent="center">
                 <GradientText colors={[theme.colors.primary, theme.colors.secondary, theme.colors.accent]} bold>
                   Select or create a conversation to start chatting
                 </GradientText>
-                <Text style={{ color: theme.colors.text_muted, marginTop: 1 }}>
+                <Text color={theme.colors.text_muted} dimColor>
                   Press ⌘N for new chat or click "+ New" in sidebar
                 </Text>
               </Box>
@@ -309,14 +510,14 @@ export function App() {
           </Box>
 
           {/* Input Area */}
-          <AnimatedBox animation="slideUp" duration={200}>
+          <Fade visible={true}>
             <Input
               onSubmit={handleSendMessage}
               disabled={agentStatus === 'streaming' || agentStatus === 'thinking' || !engineReady}
               model={currentModel}
               provider={currentProvider}
             />
-          </AnimatedBox>
+          </Fade>
 
           {/* Status Bar */}
           <StatusBar
@@ -361,6 +562,4 @@ export async function run() {
 }
 
 // Run if main module
-if (import.meta.url === `file://${process.argv[1]}`) {
-  run().catch(console.error);
-}
+run().catch(console.error);

@@ -1,6 +1,6 @@
 // Theme system for Arcanum TUI
 
-import { Theme } from '../types';
+import type { Theme } from '../types';
 
 export const themes: Record<string, Theme> = {
   // Cyberpunk / Synthwave theme
@@ -197,6 +197,8 @@ export const themes: Record<string, Theme> = {
 };
 
 export type ThemeName = keyof typeof themes;
+
+export type { Theme };
 
 export const defaultTheme: ThemeName = 'cyberpunk';
 

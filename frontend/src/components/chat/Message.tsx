@@ -13,7 +13,7 @@ interface MessageProps {
 }
 
 export function Message({ message, isLast = false, compact = false }: MessageProps) {
-  const { theme } = useTheme();
+  const theme = useTheme();
   const stdout = useStdout();
   const [showFull, setShowFull] = useState(false);
 
@@ -51,16 +51,15 @@ export function Message({ message, isLast = false, compact = false }: MessagePro
       marginTop={compact ? 0 : 1}
       marginBottom={isLast && !compact ? 1 : 0}
       paddingLeft={2}
-      borderLeft={{ width: 2, color: color + '44' }}
-      style={{ opacity: message.streaming ? 0.9 : 1 }}
+      borderStyle="single"
+      borderLeft
+      borderLeftColor={color + '44'}
     >
       {/* Header */}
       <Box flexDirection="row" alignItems="center" gap={1} marginBottom={compact ? 0 : 0.5}>
-        <Text style={{ color, bold: true }}>{icon}</Text>
-        <Text style={{ color, bold: true }}>{label}</Text>
-        <Text style={{ color: theme.colors.text_muted, fontSize: 'small' }}>
-          {new Date(message.timestamp).toLocaleTimeString()}
-        </Text>
+        <Text color={color} bold>{icon}</Text>
+        <Text color={color} bold>{label}</Text>
+        <Text color={theme.colors.text_muted} dimColor>{new Date(message.timestamp).toLocaleTimeString()}</Text>
         {message.streaming && <Pulse color={color} speed={800}>●</Pulse>}
       </Box>
 
@@ -69,7 +68,7 @@ export function Message({ message, isLast = false, compact = false }: MessagePro
         {isStreaming ? (
           <TypingText text={content} speed={15} />
         ) : (
-          <Text style={{ color: theme.colors.text, wrap: 'wrap' }}>{content}</Text>
+          <Text color={theme.colors.text} wrap="wrap">{content}</Text>
         )}
 
         {/* Tool calls */}
@@ -100,28 +99,26 @@ interface ToolCallDisplayProps {
 }
 
 function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
-  const { theme } = useTheme();
+  const theme = useTheme();
 
   try {
     const args = JSON.parse(toolCall.function.arguments);
     return (
-      <Box marginTop={0.5} paddingLeft={1} borderLeft={{ width: 1, color: theme.colors.warning + '88' }}>
+      <Box marginTop={0.5} paddingLeft={1} borderStyle="single" borderLeft borderLeftColor={theme.colors.warning + '88'}>
         <Box flexDirection="row" gap={1}>
-          <Text style={{ color: theme.colors.warning }}>⚡</Text>
-          <Text style={{ color: theme.colors.text_muted }}>Calling</Text>
+          <Text color={theme.colors.warning}>⚡</Text>
+          <Text color={theme.colors.text_muted} dimColor>Calling</Text>
           <GradientText colors={[theme.colors.warning, theme.colors.accent]}>{toolCall.function.name}</GradientText>
         </Box>
         <Box marginLeft={2}>
-          <Text style={{ color: theme.colors.text_muted, fontSize: 'small' }}>
-            {JSON.stringify(args, null, 2)}
-          </Text>
+          <Text color={theme.colors.text_muted} dimColor>{JSON.stringify(args, null, 2)}</Text>
         </Box>
       </Box>
     );
   } catch {
     return (
-      <Box marginTop={0.5} paddingLeft={1} borderLeft={{ width: 1, color: theme.colors.warning + '88' }}>
-        <Text style={{ color: theme.colors.warning }}>⚡ {toolCall.function.name}</Text>
+      <Box marginTop={0.5} paddingLeft={1} borderStyle="single" borderLeft borderLeftColor={theme.colors.warning + '88'}>
+        <Text color={theme.colors.warning}>⚡ {toolCall.function.name}</Text>
       </Box>
     );
   }
@@ -133,20 +130,20 @@ interface ToolResultDisplayProps {
 }
 
 function ToolResultDisplay({ result }: ToolResultDisplayProps) {
-  const { theme } = useTheme();
+  const theme = useTheme();
   const isError = !!result.error;
 
   return (
-    <Box marginTop={0.5} paddingLeft={1} borderLeft={{ width: 1, color: (isError ? theme.colors.error : theme.colors.success) + '88' }}>
+    <Box marginTop={0.5} paddingLeft={1} borderStyle="single" borderLeft borderLeftColor={(isError ? theme.colors.error : theme.colors.success) + '88'}>
       <Box flexDirection="row" gap={1}>
-        <Text style={{ color: isError ? theme.colors.error : theme.colors.success }}>
+        <Text color={isError ? theme.colors.error : theme.colors.success}>
           {isError ? '✗' : '✓'}
         </Text>
-        <Text style={{ color: theme.colors.text_muted }}>Result from</Text>
-        <Text style={{ color: theme.colors.accent }}>{result.name}</Text>
+        <Text color={theme.colors.text_muted} dimColor>Result from</Text>
+        <Text color={theme.colors.accent}>{result.name}</Text>
       </Box>
       <Box marginLeft={2} marginTop={0.5}>
-        <Text style={{ color: isError ? theme.colors.error : theme.colors.text, fontSize: 'small' }}>
+        <Text color={isError ? theme.colors.error : theme.colors.text} dimColor>
           {isError ? result.error : JSON.stringify(result.result, null, 2)}
         </Text>
       </Box>
@@ -163,7 +160,7 @@ interface ConversationItemProps {
 }
 
 export function ConversationItem({ conversation, active, onSelect, onDelete }: ConversationItemProps) {
-  const { theme } = useTheme();
+  const theme = useTheme();
   const [hover, setHover] = useState(false);
 
   useInput((input, key) => {
@@ -175,31 +172,22 @@ export function ConversationItem({ conversation, active, onSelect, onDelete }: C
     <Box
       paddingX={1}
       paddingY={0.5}
-      backgroundColor={active ? theme.colors.primary + '22' : hover ? theme.colors.surface : 'transparent'}
-      borderLeft={{ width: active ? 3 : 0, color: theme.colors.primary }}
-      onFocus={() => setHover(true)}
-      onBlur={() => setHover(false)}
+      borderStyle="single" borderLeft={Boolean(active)} borderLeftColor={theme.colors.primary}
     >
       <Box flexDirection="row" alignItems="center" justifyContent="space-between">
         <Box flexDirection="row" alignItems="center" gap={1}>
-          <Text style={{ color: active ? theme.colors.primary : theme.colors.text_muted }}>
+          <Text color={active ? theme.colors.primary : theme.colors.text_muted}>
             {active ? '▸' : '•'}
           </Text>
-          <Text
-            style={{
-              color: active ? theme.colors.text : theme.colors.text_muted,
-              bold: active,
-              textOverflow: 'ellipsis',
-            }}
-          >
+          <Text color={active ? theme.colors.text : theme.colors.text_muted} bold={active}>
             {conversation.title || 'New Conversation'}
           </Text>
         </Box>
         {hover && (
-          <Text style={{ color: theme.colors.error }}>✕</Text>
+          <Text color={theme.colors.error}>✕</Text>
         )}
       </Box>
-      <Text style={{ color: theme.colors.text_muted, fontSize: 'small', marginLeft: 2 }}>
+      <Text color={theme.colors.text_muted} dimColor>
         {conversation.model} • {conversation.messages.length} msgs
       </Text>
     </Box>
@@ -213,7 +201,7 @@ interface WelcomeBannerProps {
 }
 
 export function WelcomeBanner({ version, themeName }: WelcomeBannerProps) {
-  const { theme } = useTheme();
+  const theme = useTheme();
 
   return (
     <Box
@@ -221,27 +209,26 @@ export function WelcomeBanner({ version, themeName }: WelcomeBannerProps) {
       marginBottom={1}
       borderStyle="round"
       borderColor={theme.colors.border}
-      backgroundColor={theme.colors.surface}
     >
       <Box flexDirection="row" alignItems="center" justifyContent="space-between" marginBottom={1}>
         <GradientText colors={[theme.colors.primary, theme.colors.secondary, theme.colors.accent]} bold>
           ARX
         </GradientText>
-        <Text style={{ color: theme.colors.text_muted }}>v{version}</Text>
+        <Text color={theme.colors.text_muted} dimColor>v{version}</Text>
       </Box>
 
       <Box flexDirection="row" gap={2} flexWrap="wrap">
         <Box>
-          <Text style={{ color: theme.colors.text_muted }}>Theme:</Text>
+          <Text color={theme.colors.text_muted} dimColor>Theme:</Text>
           <GradientText>{themeName}</GradientText>
         </Box>
         <Box>
-          <Text style={{ color: theme.colors.text_muted }}>Providers:</Text>
-          <Text style={{ color: theme.colors.accent }}>OpenAI, Anthropic, NVIDIA, Custom</Text>
+          <Text color={theme.colors.text_muted} dimColor>Providers:</Text>
+          <Text color={theme.colors.accent}>OpenAI, Anthropic, NVIDIA, Custom</Text>
         </Box>
         <Box>
-          <Text style={{ color: theme.colors.text_muted }}>Shortcuts:</Text>
-          <Text style={{ color: theme.colors.text }}>⌘N New • ⌘P Palette • ⌘, Settings</Text>
+          <Text color={theme.colors.text_muted} dimColor>Shortcuts:</Text>
+          <Text color={theme.colors.text}>⌘N New • ⌘P Palette • ⌘, Settings</Text>
         </Box>
       </Box>
     </Box>
@@ -266,7 +253,7 @@ export function StatusBar({
   provider,
   tokens,
 }: StatusBarProps) {
-  const { theme } = useTheme();
+  const theme = useTheme();
 
   const statusColors = {
     idle: theme.colors.text_muted,
@@ -291,38 +278,35 @@ export function StatusBar({
     <Box
       paddingX={1}
       paddingY={0.5}
-      backgroundColor={theme.colors.surface}
-      borderTop={{ width: 1, color: theme.colors.border }}
+      borderStyle="single"
+      borderTop
+      borderTopColor={theme.colors.border}
       flexDirection="row"
       alignItems="center"
       justifyContent="space-between"
     >
       <Box flexDirection="row" alignItems="center" gap={1}>
-        <Text style={{ color: engineConnected ? theme.colors.success : theme.colors.error }}>
+        <Text color={engineConnected ? theme.colors.success : theme.colors.error}>
           {engineConnected ? '●' : '○'}
         </Text>
-        <Text style={{ color: theme.colors.text_muted, fontSize: 'small' }}>
-          {engineStatus.toUpperCase()}
-        </Text>
-        <Text style={{ color: statusColor }}>{statusIcon}</Text>
-        <Text style={{ color: statusColor, fontSize: 'small', textTransform: 'uppercase' }}>
-          {agentStatus}
-        </Text>
+        <Text color={theme.colors.text_muted} dimColor>{engineStatus.toUpperCase()}</Text>
+        <Text color={statusColor}>{statusIcon}</Text>
+        <Text color={statusColor} dimColor>{agentStatus.toUpperCase()}</Text>
       </Box>
 
       <Box flexDirection="row" alignItems="center" gap={2}>
         <Box flexDirection="row" alignItems="center" gap={0.5}>
-          <Text style={{ color: theme.colors.text_muted, fontSize: 'small' }}>Model:</Text>
-          <Text style={{ color: theme.colors.accent, fontSize: 'small', bold: true }}>{model}</Text>
+          <Text color={theme.colors.text_muted} dimColor>Model:</Text>
+          <Text color={theme.colors.accent} dimColor bold>{model}</Text>
         </Box>
         <Box flexDirection="row" alignItems="center" gap={0.5}>
-          <Text style={{ color: theme.colors.text_muted, fontSize: 'small' }}>Provider:</Text>
-          <Text style={{ color: theme.colors.primary, fontSize: 'small' }}>{provider}</Text>
+          <Text color={theme.colors.text_muted} dimColor>Provider:</Text>
+          <Text color={theme.colors.primary} dimColor>{provider}</Text>
         </Box>
         {tokens !== undefined && (
           <Box flexDirection="row" alignItems="center" gap={0.5}>
-            <Text style={{ color: theme.colors.text_muted, fontSize: 'small' }}>Tokens:</Text>
-            <Text style={{ color: theme.colors.warning, fontSize: 'small' }}>{tokens.toLocaleString()}</Text>
+            <Text color={theme.colors.text_muted} dimColor>Tokens:</Text>
+            <Text color={theme.colors.warning} dimColor>{tokens.toLocaleString()}</Text>
           </Box>
         )}
       </Box>
@@ -338,7 +322,7 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ open, onClose, onSelect }: CommandPaletteProps) {
-  const { theme } = useTheme();
+  const theme = useTheme();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -376,27 +360,23 @@ export function CommandPalette({ open, onClose, onSelect }: CommandPaletteProps)
 
   return (
     <Box
-      position="absolute"
-      top="20%"
-      left="10%"
-      width="80%"
-      maxHeight="60%"
-      backgroundColor={theme.colors.surface}
       borderStyle="round"
       borderColor={theme.colors.primary}
       padding={1}
     >
       <Box flexDirection="row" alignItems="center" gap={1} marginBottom={1}>
-        <Text style={{ color: theme.colors.primary }}>⌘</Text>
-        <Text style={{ color: theme.colors.text }}>Command Palette</Text>
-        <Box flex="1" />
-        <Text style={{ color: theme.colors.text_muted }}>ESC to close</Text>
+        <Text color={theme.colors.primary}>⌘</Text>
+        <Text color={theme.colors.text}>Command Palette</Text>
+        <Box flexGrow={1} />
+        <Text color={theme.colors.text_muted} dimColor>ESC to close</Text>
       </Box>
 
-      <Box marginBottom={1} borderBottom={{ width: 1, color: theme.colors.border }}>
-        <Text style={{ color: theme.colors.primary }}>› </Text>
-        <Text style={{ color: theme.colors.text }}>{query}</Text>
-        <Text style={{ color: theme.colors.primary, opacity: 0.5 }}>█</Text>
+      <Box marginBottom={1} borderStyle="single"
+      borderBottom
+      borderBottomColor={theme.colors.border}>
+        <Text color={theme.colors.primary}>› </Text>
+        <Text color={theme.colors.text}>{query}</Text>
+        <Text color={theme.colors.primary} dimColor>█</Text>
       </Box>
 
       <Box flexDirection="column">
@@ -405,30 +385,28 @@ export function CommandPalette({ open, onClose, onSelect }: CommandPaletteProps)
             key={cmd.id}
             paddingX={1}
             paddingY={0.3}
-            backgroundColor={i === selectedIndex ? theme.colors.primary + '33' : 'transparent'}
             flexDirection="row"
             alignItems="center"
             justifyContent="space-between"
           >
             <Box flexDirection="row" gap={1}>
-              <Text style={{ color: i === selectedIndex ? theme.colors.primary : theme.colors.text_muted }}>
+              <Text color={i === selectedIndex ? theme.colors.primary : theme.colors.text_muted}>
                 {i === selectedIndex ? '▸' : ' '}
               </Text>
-              <Text style={{ color: i === selectedIndex ? theme.colors.text : theme.colors.text_muted, bold: i === selectedIndex }}>
+              <Text color={i === selectedIndex ? theme.colors.text : theme.colors.text_muted} bold={i === selectedIndex}>
                 {cmd.label}
               </Text>
-              <Text style={{ color: theme.colors.text_muted, fontSize: 'small' }}>({cmd.desc})</Text>
+              <Text color={theme.colors.text_muted} dimColor>({cmd.desc})</Text>
             </Box>
-            {cmd.keys && <Text style={{ color: theme.colors.text_muted, fontSize: 'small' }}>{cmd.keys}</Text>}
+            {cmd.keys && <Text color={theme.colors.text_muted} dimColor>{cmd.keys}</Text>}
           </Box>
         ))}
         {filtered.length === 0 && (
           <Box padding={1}>
-            <Text style={{ color: theme.colors.text_muted }}>No commands found</Text>
+            <Text color={theme.colors.text_muted} dimColor>No commands found</Text>
           </Box>
         )}
       </Box>
     </Box>
   );
 }
-
