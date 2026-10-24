@@ -1,4 +1,4 @@
-# Multi-stage Docker build for ARX CLI
+# Multi-stage Docker build for Arcanum Agent (arx)
 
 # Stage 1: Build C++ Engine
 FROM ubuntu:22.04 AS engine-builder
@@ -18,8 +18,9 @@ RUN mkdir -p build && cd build && \
 FROM node:20-alpine AS frontend-builder
 
 WORKDIR /build/frontend
-COPY frontend/package*.json ./
-RUN npm ci
+# The frontend has no lockfile of its own; deps are resolved from package.json
+COPY frontend/package.json ./
+RUN npm install
 
 COPY frontend/ .
 RUN npm run build
@@ -45,7 +46,6 @@ RUN mkdir -p /home/arx/.arx/plugins && \
     chown -R arx:arx /home/arx
 
 USER arx
-ENV PATH="/home/arx/frontend:${PATH}"
 ENV ARX_DATA_DIR="/home/arx/.arx"
 ENV ARX_PLUGINS_DIR="/home/arx/.arx/plugins"
 
