@@ -4,7 +4,7 @@
 > 
 > `arx` (noun): *fortress, citadel, stronghold* — Your command center for AI.
 
-[![CI](https://github.com/arx-cli/arx-cli/workflows/CI/CD/badge.svg)](https://github.com/arx-cli/arx-cli/actions)
+[![CI](https://github.com/arx-dev-labs/arcanum-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/arx-dev-labs/arcanum-agent/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%3E%3D20-green.svg)](https://nodejs.org)
 [![C++](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org)
@@ -13,6 +13,13 @@
 
 ## AI DISCLOSURE
 
+ARX is an AI-powered productivity assistant designed to help developers move faster, reason more clearly, and work with complex tooling through a more natural interface. It can generate code, suggest commands, summarize context, automate repetitive work, and support decision-making across a wide range of engineering tasks.
+
+However, AI-generated output may be incomplete, incorrect, or contextually inappropriate. Please use it as a support tool rather than a substitute for human judgment. Before relying on generated suggestions for production work, security-sensitive tasks, compliance-critical systems, or externally shared materials, review the output carefully and verify its correctness, safety, and relevance to your environment.
+
+ARX is intended to augment your capabilities, not replace your expertise. Final decisions, accountability, and responsibility remain with you.
+
+---
 
 ## Architecture
 
@@ -38,10 +45,10 @@
                     ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                     Engine (C++20)                           │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐        │
-│  │  HTTP    │ │  WebSocket│ │   SSE    │ │ Plugins  │        │
-│  │  Client  │ │  Client  │ │  Client  │ │  System  │        │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘        │
+│  ┌──────────┐ ┌───────────┐ ┌──────────┐ ┌──────────┐        │
+│  │  HTTP    │ │  WebSocket │ │   SSE    │ │ Plugins  │        │
+│  │  Client  │ │  Client    │ │  Client  │ │  System  │        │
+│  └────┬─────┘ └────┬──────┘ └────┬─────┘ └────┬─────┘        │
 │       │            │            │            │               │
 │       └────────────┼────────────┼────────────┘               │
 │                    ▼                                         │
@@ -59,7 +66,7 @@
 - **Plugin System**: Dynamic `.so`/`.dll` loading with C API — extend with any capability
 - **Streaming**: Real-time token streaming with typing animation
 - **Command Palette**: `⌘P` for quick actions (Vim-style)
-- **Conversation Management**: Multiple chats, history, export, search
+- **Conversation Management**: Multiple chats, history, export, and search
 - **Cross-platform**: Linux, macOS, Windows (single binary via `pkg`)
 
 ---
@@ -68,8 +75,8 @@
 
 ```bash
 # Clone and build
-git clone https://github.com/arx-cli/arx-cli
-cd arx-cli
+git clone https://github.com/arx-dev-labs/arcanum-agent.git
+cd arcanum-agent
 npm run install:all
 
 # Development (hot reload)
@@ -87,11 +94,11 @@ npm run start
 
 ```bash
 # Linux/macOS
-curl -fsSL https://github.com/arx-cli/arx-cli/releases/latest/download/arx-linux-x64.tar.gz | tar -xz
+curl -fsSL https://github.com/arx-dev-labs/arcanum-agent/releases/latest/download/arx-linux-x64.tar.gz | tar -xz
 sudo mv arx /usr/local/bin/
 
 # Windows (PowerShell)
-irm https://github.com/arx-cli/arx-cli/releases/latest/download/arx-win-x64.zip | iex
+irm https://github.com/arx-dev-labs/arcanum-agent/releases/latest/download/arx-win-x64.zip | iex
 ```
 
 ## Configuration
@@ -347,4 +354,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-**Made with ❤️ by the [diffusion-group](https://github.com/idkdsdksjd) team and a helper hand of [MiMO]([)](https://github.com/XiaomiMiMo/MiMo-V2-Flash)!**
+**Made with ❤️ by the ARX team, with inspiration from [MiMO](https://github.com/XiaomiMiMo/MiMo-V2-Flash).**
