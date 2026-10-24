@@ -13,7 +13,6 @@
 
 ## AI DISCLOSURE
 
----
 
 ## Architecture
 
