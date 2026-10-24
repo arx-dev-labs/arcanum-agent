@@ -13,11 +13,11 @@
 
 ## AI DISCLOSURE
 
-ARX is an AI-powered productivity assistant designed to help developers move faster, reason more clearly, and work with complex tooling through a more natural interface. It can generate code, suggest commands, summarize context, automate repetitive work, and support decision-making across a wide range of engineering tasks.
+This project was created with the assistance of AI tools during the development process. AI supported ideation, drafting, documentation, and iteration, but the final product remains a human-led project shaped by deliberate engineering decisions, review, and validation.
 
-However, AI-generated output may be incomplete, incorrect, or contextually inappropriate. Please use it as a support tool rather than a substitute for human judgment. Before relying on generated suggestions for production work, security-sensitive tasks, compliance-critical systems, or externally shared materials, review the output carefully and verify its correctness, safety, and relevance to your environment.
+ARX is not an autonomous AI system by itself; it is a developer-focused CLI tool designed to improve productivity and streamline workflows. The project benefits from AI assistance, while responsibility for code quality, architecture, correctness, security, and long-term direction remains with the human contributors and maintainers.
 
-ARX is intended to augment your capabilities, not replace your expertise. Final decisions, accountability, and responsibility remain with you.
+We believe in transparent collaboration. Using AI to accelerate development is a practical part of modern software creation, provided it is accompanied by critical review, accountability, and human oversight.
 
 ---
 
