@@ -4,20 +4,10 @@
 > 
 > `arx` (noun): *fortress, citadel, stronghold* — Your command center for AI.
 
-[![CI](https://github.com/arx-dev-labs/arcanum-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/arx-dev-labs/arcanum-agent/actions)
+[![CI/CD](https://github.com/arx-dev-labs/arcanum-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/arx-dev-labs/arcanum-agent/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%3E%3D20-green.svg)](https://nodejs.org)
 [![C++](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org)
-
----
-
-## AI DISCLOSURE
-
-This project was created with the assistance of AI tools during the development process. AI supported ideation, drafting, documentation, and iteration, but the final product remains a human-led project shaped by deliberate engineering decisions, review, and validation.
-
-ARX is not an autonomous AI system by itself; it is a developer-focused CLI tool designed to improve productivity and streamline workflows. The project benefits from AI assistance, while responsibility for code quality, architecture, correctness, security, and long-term direction remains with the human contributors and maintainers.
-
-We believe in transparent collaboration. Using AI to accelerate development is a practical part of modern software creation, provided it is accompanied by critical review, accountability, and human oversight.
 
 ---
 
@@ -45,10 +35,10 @@ We believe in transparent collaboration. Using AI to accelerate development is a
                     ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                     Engine (C++20)                           │
-│  ┌──────────┐ ┌───────────┐ ┌──────────┐ ┌──────────┐        │
-│  │  HTTP    │ │  WebSocket │ │   SSE    │ │ Plugins  │        │
-│  │  Client  │ │  Client    │ │  Client  │ │  System  │        │
-│  └────┬─────┘ └────┬──────┘ └────┬─────┘ └────┬─────┘        │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐        │
+│  │  HTTP    │ │  WebSocket│ │   SSE    │ │ Plugins  │        │
+│  │  Client  │ │  Client  │ │  Client  │ │  System  │        │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘        │
 │       │            │            │            │               │
 │       └────────────┼────────────┼────────────┘               │
 │                    ▼                                         │
@@ -66,7 +56,7 @@ We believe in transparent collaboration. Using AI to accelerate development is a
 - **Plugin System**: Dynamic `.so`/`.dll` loading with C API — extend with any capability
 - **Streaming**: Real-time token streaming with typing animation
 - **Command Palette**: `⌘P` for quick actions (Vim-style)
-- **Conversation Management**: Multiple chats, history, export, and search
+- **Conversation Management**: Multiple chats, history, export, search
 - **Cross-platform**: Linux, macOS, Windows (single binary via `pkg`)
 
 ---
@@ -75,7 +65,7 @@ We believe in transparent collaboration. Using AI to accelerate development is a
 
 ```bash
 # Clone and build
-git clone https://github.com/arx-dev-labs/arcanum-agent.git
+git clone https://github.com/arx-dev-labs/arcanum-agent
 cd arcanum-agent
 npm run install:all
 
@@ -99,6 +89,18 @@ sudo mv arx /usr/local/bin/
 
 # Windows (PowerShell)
 irm https://github.com/arx-dev-labs/arcanum-agent/releases/latest/download/arx-win-x64.zip | iex
+```
+
+## Running the frontend with the engine
+
+The TUI talks JSONL to `arx-engine` over stdin/stdout. It first looks for the
+engine next to the repository (`engine/build/arx-engine`) and then falls back
+to inheriting its stdio, so you can also start the engine yourself and pipe
+both processes together. `ARX_ENGINE_BIN` (or `ARCANUM_ENGINE_BIN`) points the
+frontend at a specific engine binary:
+
+```bash
+export ARX_ENGINE_BIN=/usr/local/bin/arx-engine
 ```
 
 ## Configuration
@@ -196,7 +198,7 @@ Create a plugin with the C API:
 
 ```c
 // web_search.c
-#include <arcanum/plugin.h>
+#include <arcanum/plugin.hpp>
 
 static const PluginMetadata metadata = {
     .name = "web_search",
@@ -219,7 +221,7 @@ void arcanum_plugin_destroy(IPlugin* p) { delete static_cast<WebSearchPlugin*>(p
 
 **Build:**
 ```bash
-g++ -shared -fPIC -std=c++20 -I/path/to/arx-cli/engine/include \
+g++ -shared -fPIC -std=c++20 -I/path/to/arcanum-agent/engine/include \
     -o web_search.so web_search.cpp
 ```
 
@@ -248,14 +250,14 @@ JSONL messages over stdin/stdout — language agnostic:
 - `0x01` LOG, `0x02` PROGRESS, `0x03` RESULT, `0x04` ERROR, `0x05` EVENT, `0x06` STREAM_CHUNK, `0x07` TOOL_CALL, `0x08` TOOL_RESULT
 - Requests: `0x80` REQUEST, `0x81` CANCEL, `0x82` CONFIG_UPDATE, `0x83` PLUGIN_LOAD, `0x84` PLUGIN_UNLOAD
 
-**Request Types:** CHAT_COMPLETION, TOOL_EXECUTE, FILE_READ, FILE_WRITE, FILE_LIST, SHELL_EXECUTE, HTTP_REQUEST, WS_CONNECT, SSE_CONNECT, PLUGIN_CALL, AGENT_RUN
+**Request Types:** CHAT_COMPLETION (0x01), TOOL_EXECUTE (0x02), FILE_READ (0x03), FILE_WRITE (0x04), FILE_LIST (0x05), SHELL_EXECUTE (0x06), HTTP_REQUEST (0x07), WS_CONNECT (0x08), SSE_CONNECT (0x09), PLUGIN_CALL (0x0A), AGENT_RUN (0x0B), PROVIDER_LIST (0xF0), CONFIG_GET (0xF1), PING (0xF2). Names are also accepted for convenience.
 
 ---
 
 ## Project Structure
 
 ```
-arx-cli/
+arcanum-agent/
 ├── package.json           # Root workspace (npm workspaces)
 ├── README.md
 ├── LICENSE
@@ -264,12 +266,13 @@ arx-cli/
 ├── scripts/
 │   ├── build.sh           # Build everything
 │   └── dev.sh             # Dev mode with hot reload
-├── frontend/              # Ink/React TUI (@arx-cli/frontend)
+├── frontend/              # Ink/React TUI (@arcanum-agent/frontend)
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── src/
 │       ├── App.tsx        # Main app component
 │       ├── cli.tsx        # Entry point
+│       ├── protocol.ts    # JSONL wire protocol (single source of truth)
 │       ├── components/
 │       │   ├── animated/  # AnimatedBox, TypingText, GradientText, Spinner, Pulse, ProgressBar, GlitchText, Float
 │       │   ├── chat/      # Message, Input, WelcomeBanner, StatusBar, CommandPalette
@@ -279,9 +282,9 @@ arx-cli/
 │       ├── store/         # Zustand store (reactive state)
 │       ├── theme/         # 8 themes + ANSI helpers
 │       └── types/         # TypeScript types
-└── engine/                # C++20 Engine (arx-engine)
+└── engine/                # C++20 Engine (arcanum_engine / arx-engine)
     ├── CMakeLists.txt
-    ├── include/arx/       # Public headers (arx/engine.hpp, arx/http.hpp, etc.)
+    ├── include/arcanum/   # Public headers (arcanum/engine.hpp, arcanum/http.hpp, etc.)
     └── src/
         ├── core/          # Engine, MessageBus, Config, PluginManager
         ├── http/          # HttpClient, RequestBuilder, AuthManager
@@ -343,6 +346,7 @@ npm run package
 #   arx                    # Frontend binary (pkg)
 #   arx-engine             # C++ engine binary
 #   arx-linux-x64.tar.gz   # Linux release
+#   arx-macos-x64.tar.gz   # macOS release
 #   arx-win-x64.zip        # Windows release
 ```
 
@@ -354,4 +358,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-**Made with ❤️ by the ARX team, with inspiration from [MiMO](https://github.com/XiaomiMiMo/MiMo-V2-Flash).**
+**Made with ❤️ by the [arx-dev-labs](https://github.com/arx-dev-labs) team**

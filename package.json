@@ -1,7 +1,7 @@
 {
-  "name": "arx-cli",
+  "name": "arcanum-agent",
   "version": "1.0.0",
-  "description": "ARX - Beautiful CLI AI Agent with C++ Engine Core. Multi-provider (OpenAI, Anthropic, NVIDIA), plugin system, streaming TUI.",
+  "description": "Arcanum (arx) - Beautiful CLI AI Agent with C++ Engine Core. Multi-provider (OpenAI, Anthropic, NVIDIA), plugin system, streaming TUI.",
   "private": true,
   "workspaces": [
     "frontend",
@@ -9,11 +9,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/arx-cli/arx-cli.git"
+    "url": "https://github.com/arx-dev-labs/arcanum-agent.git"
   },
-  "homepage": "https://github.com/arx-cli/arx-cli",
+  "homepage": "https://github.com/arx-dev-labs/arcanum-agent#readme",
   "bugs": {
-    "url": "https://github.com/arx-cli/arx-cli/issues"
+    "url": "https://github.com/arx-dev-labs/arcanum-agent/issues"
   },
   "scripts": {
     "install:all": "npm install && cd frontend && npm install && cd ../engine && mkdir -p build && cd build && cmake .. && make -j$(nproc)",
@@ -54,6 +54,6 @@
     "anthropic",
     "nvidia"
   ],
-  "author": "arx-cli",
+  "author": "arx-dev-labs",
   "license": "MIT"
 }
