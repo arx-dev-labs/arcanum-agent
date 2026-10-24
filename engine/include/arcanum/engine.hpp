@@ -53,6 +53,10 @@ enum class RequestType : uint8_t {
     SSE_CONNECT = 0x09,
     PLUGIN_CALL = 0x0A,
     AGENT_RUN = 0x0B,
+    // Extended request types implemented by the engine binary
+    PROVIDER_LIST = 0xF0,
+    CONFIG_GET = 0xF1,
+    PING = 0xF2,
 };
 
 // Engine configuration

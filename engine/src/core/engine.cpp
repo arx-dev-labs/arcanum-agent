@@ -4,6 +4,7 @@
 #include "arcanum/plugin.hpp"
 #include "arcanum/api.hpp"
 #include <iostream>
+#include <optional>
 #include <thread>
 #include <chrono>
 
@@ -35,6 +36,12 @@ public:
         // Set up message handlers
         setup_handlers();
 
+        // Wire every engine-originated message to stdout as JSONL. Without
+        // this the engine receives requests but never emits any response.
+        bus_->set_output_handler([](const Message& msg) {
+            std::cout << msg.serialize() << std::endl;
+        });
+
         return Result<void>::ok();
     }
 
@@ -43,10 +50,13 @@ public:
             return Result<void>::err("Engine already running");
         }
 
+        // Start bus dispatcher before any publish can enqueue messages
+        bus_->start();
+
         // Start stdin/stdout message loop
         io_thread_ = std::thread(&EngineImpl::io_loop, this);
 
-        // Send ready message
+        // Announce readiness on the wire
         Message ready_msg(MessageType::EVENT, {{"event", "engine.ready"}, {"version", "1.0.0"}});
         bus_->publish(ready_msg);
 
@@ -58,18 +68,17 @@ public:
             return Result<void>::ok();
         }
 
-        // Send shutdown message
+        // Announce shutdown on the wire
         Message shutdown_msg(MessageType::EVENT, {{"event", "engine.shutdown"}});
         bus_->publish(shutdown_msg);
 
+        // The io thread is normally blocked on std::getline and cannot be
+        // unblocked safely; detach it. The bus and managers stay alive until
+        // process exit so the detached thread can never touch freed memory.
         if (io_thread_.joinable()) {
-            io_thread_.join();
+            io_thread_.detach();
+            io_thread_ = {};
         }
-
-        plugin_manager_.reset();
-        api_registry_.reset();
-        bus_.reset();
-        config_.reset();
 
         return Result<void>::ok();
     }
@@ -127,7 +136,13 @@ private:
     }
 
     void handle_request(const Message& msg) {
-        auto req_type = static_cast<RequestType>(msg.payload.value("request_type", 0));
+        RequestType req_type;
+        if (auto parsed = parse_request_type(msg.payload.value("request_type", json()))) {
+            req_type = *parsed;
+        } else {
+            send_error(msg, "Unknown request type");
+            return;
+        }
 
         switch (req_type) {
             case RequestType::CHAT_COMPLETION:
@@ -135,6 +150,12 @@ private:
                 break;
             case RequestType::TOOL_EXECUTE:
                 handle_tool_execute(msg);
+                break;
+            case RequestType::FILE_READ:
+            case RequestType::FILE_WRITE:
+            case RequestType::FILE_LIST:
+            case RequestType::SHELL_EXECUTE:
+                send_error(msg, "Not yet implemented");
                 break;
             case RequestType::HTTP_REQUEST:
                 handle_http_request(msg);
@@ -151,9 +172,48 @@ private:
             case RequestType::AGENT_RUN:
                 handle_agent_run(msg);
                 break;
+            case RequestType::PROVIDER_LIST:
+                handle_provider_list(msg);
+                break;
+            case RequestType::CONFIG_GET:
+                handle_config_get(msg);
+                break;
+            case RequestType::PING:
+                handle_ping(msg);
+                break;
             default:
                 send_error(msg, "Unknown request type");
         }
+    }
+
+private:
+    static std::optional<RequestType> parse_request_type(const json& value) {
+        if (value.is_number_unsigned() || (value.is_number_integer() && value >= 0)) {
+            const auto raw = value.get<long long>();
+            if (raw < 0 || raw > 0xFF) return std::nullopt;
+            return static_cast<RequestType>(raw);
+        }
+        if (value.is_string()) {
+            static const std::unordered_map<std::string, RequestType> names = {
+                {"chat_completion", RequestType::CHAT_COMPLETION},
+                {"tool_execute", RequestType::TOOL_EXECUTE},
+                {"file_read", RequestType::FILE_READ},
+                {"file_write", RequestType::FILE_WRITE},
+                {"file_list", RequestType::FILE_LIST},
+                {"shell_execute", RequestType::SHELL_EXECUTE},
+                {"http_request", RequestType::HTTP_REQUEST},
+                {"ws_connect", RequestType::WS_CONNECT},
+                {"sse_connect", RequestType::SSE_CONNECT},
+                {"plugin_call", RequestType::PLUGIN_CALL},
+                {"agent_run", RequestType::AGENT_RUN},
+                {"provider_list", RequestType::PROVIDER_LIST},
+                {"config_get", RequestType::CONFIG_GET},
+                {"ping", RequestType::PING},
+            };
+            auto it = names.find(value.get<std::string>());
+            if (it != names.end()) return it->second;
+        }
+        return std::nullopt;
     }
 
     void handle_chat_completion(const Message& msg) {
@@ -266,6 +326,33 @@ private:
 
     void handle_agent_run(const Message& msg) {
         send_error(msg, "Agent run not yet implemented");
+    }
+
+    void handle_provider_list(const Message& msg) {
+        json providers = json::array();
+        for (const auto& name : api_registry_->list_providers()) {
+            const IProvider* provider = api_registry_->get_provider(name);
+            providers.push_back({
+                {"name", name},
+                {"models", provider ? provider->supported_models() : json::array()},
+                {"config", json::object()},
+            });
+        }
+        Message response(MessageType::RESULT, {{"providers", providers}});
+        response.correlation_id = msg.id;
+        bus_->publish(response);
+    }
+
+    void handle_config_get(const Message& msg) {
+        Message response(MessageType::RESULT, config_->provider_configs());
+        response.correlation_id = msg.id;
+        bus_->publish(response);
+    }
+
+    void handle_ping(const Message& msg) {
+        Message response(MessageType::RESULT, {{"status", "ok"}});
+        response.correlation_id = msg.id;
+        bus_->publish(response);
     }
 
     void handle_config_update(const Message& msg) {

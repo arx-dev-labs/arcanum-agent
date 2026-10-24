@@ -11,11 +11,9 @@ static std::unique_ptr<IEngine> g_engine;
 static std::atomic<bool> g_shutdown{false};
 
 void signal_handler(int sig) {
-    std::cerr << "\nReceived signal " << sig << ", shutting down..." << std::endl;
+    // Only set the flag here: calling into the engine from a signal handler
+    // is not async-signal-safe.
     g_shutdown = true;
-    if (g_engine) {
-        g_engine->stop();
-    }
 }
 
 void print_usage(const char* prog) {
@@ -31,15 +29,33 @@ void print_usage(const char* prog) {
     std::cout << "Message format: {\"type\": N, \"id\": N, \"correlation_id\": N, \"payload\": {...}, \"timestamp\": \"...\"}\n";
 }
 
+static const char* env_first(const char* primary, const char* fallback) {
+    if (const char* v = std::getenv(primary)) return v;
+    return std::getenv(fallback);
+}
+
 EngineConfig parse_args(int argc, char* argv[]) {
     EngineConfig config;
 
-    // Defaults
+    // Defaults from the environment (used by the Docker image and CI), then
+    // the standard ~/.arx layout as a fallback. CLI arguments win over both.
     const char* home = std::getenv("HOME");
     if (!home) home = std::getenv("USERPROFILE");
     std::string base = home ? home : ".";
-    config.data_dir = base + "/.arx";
-    config.plugins_dir = base + "/.arx/plugins";
+
+    if (const char* v = env_first("ARX_DATA_DIR", "ARCANUM_DATA_DIR")) {
+        config.data_dir = v;
+    } else {
+        config.data_dir = base + "/.arx";
+    }
+    if (const char* v = env_first("ARX_PLUGINS_DIR", "ARCANUM_PLUGINS_DIR")) {
+        config.plugins_dir = v;
+    } else {
+        config.plugins_dir = config.data_dir + "/plugins";
+    }
+    if (const char* v = env_first("ARX_LOG_LEVEL", "ARCANUM_LOG_LEVEL")) {
+        config.log_level = v;
+    }
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -107,5 +123,8 @@ int main(int argc, char* argv[]) {
     g_engine.reset();
 
     std::cerr << "ARX Engine stopped." << std::endl;
-    return 0;
+
+    // Deterministic teardown: the io thread was detached while blocked on
+    // getline, so skip static destructors and exit immediately.
+    std::quick_exit(0);
 }

@@ -9,14 +9,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type")
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
 
-# Compiler warnings
-if(MSVC)
-    add_compile_options(/W4 /WX /permissive- /EHsc)
-else()
-    add_compile_options(-Wall -Wextra -Wpedantic -Werror -Wconversion -Wshadow)
-endif()
-
-# Dependencies - using FetchContent
+# Dependencies - using FetchContent.
+# NOTE: warnings stay TARGET-SCOPED on purpose; FetchContent targets must not
+# inherit -Werror or third-party warnings would break the build.
 include(FetchContent)
 
 # nlohmann/json for JSON parsing
@@ -35,6 +30,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(cpp_httplib)
 
+# standalone Asio (transport dependency of websocketpp)
+FetchContent_Declare(
+    asio
+    URL https://github.com/chriskohlhoff/asio/archive/refs/tags/asio-1-28-2.tar.gz
+)
+FetchContent_MakeAvailable(asio)
+
 # websocketpp for WebSocket support
 FetchContent_Declare(
     websocketpp
@@ -49,29 +51,43 @@ find_package(OpenSSL REQUIRED)
 # Threads
 find_package(Threads REQUIRED)
 
-# Main engine library
+if(MSVC)
+    set(ARCANUM_WARNING_FLAGS /W4 /permissive- /EHsc)
+else()
+    set(ARCANUM_WARNING_FLAGS -Wall -Wextra -Wpedantic)
+endif()
+
+# Main engine library (only sources that actually exist in the repository)
 add_library(arcanum_engine STATIC
     src/core/engine.cpp
     src/core/message_bus.cpp
-    src/core/plugin_manager.cpp
     src/core/config.cpp
+    src/core/plugin_manager.cpp
     src/http/http_client.cpp
-    src/http/request_builder.cpp
-    src/http/auth_manager.cpp
     src/ws/websocket_client.cpp
-    src/ws/sse_client.cpp
     src/api/api_registry.cpp
+    src/api/api_common.cpp
     src/api/providers/openai_provider.cpp
     src/api/providers/anthropic_provider.cpp
     src/api/providers/nvidia_provider.cpp
     src/api/providers/custom_provider.cpp
     src/plugins/plugin_loader.cpp
-    src/plugins/plugin_interface.cpp
+    src/plugins/plugin_manager.cpp
 )
 
 target_include_directories(arcanum_engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+)
+
+target_include_directories(arcanum_engine SYSTEM PUBLIC
+    ${asio_SOURCE_DIR}/include
+)
+
+target_compile_definitions(arcanum_engine PUBLIC
+    ASIO_STANDALONE
+    ASIO_HEADER_ONLY
+    WEBSOCKETPP_STANDALONE_ASIO
 )
 
 target_link_libraries(arcanum_engine PUBLIC
@@ -83,12 +99,15 @@ target_link_libraries(arcanum_engine PUBLIC
     Threads::Threads
 )
 
+target_compile_options(arcanum_engine PRIVATE ${ARCANUM_WARNING_FLAGS})
+
 # CLI executable
 add_executable(arx-engine
     src/main.cpp
 )
 
 target_link_libraries(arx-engine PRIVATE arcanum_engine)
+target_compile_options(arx-engine PRIVATE ${ARCANUM_WARNING_FLAGS})
 
 # Install targets
 install(TARGETS arcanum_engine

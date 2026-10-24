@@ -34,6 +34,13 @@ public:
     void set_external_handler(Handler handler) { external_handler_ = handler; }
     void handle_external_message(const Message& msg);
 
+    // Wire output: every engine-originated message is handed to this handler
+    // (was: messages published on the bus never left the process).
+    void set_output_handler(Handler handler);
+
+    // Start the dispatcher thread (publish() only delivers after this).
+    void start();
+
     // Statistics
     struct Stats {
         std::atomic<uint64_t> published{0};
@@ -51,6 +58,8 @@ private:
         bool use_filter = false;
     };
 
+    void emit(const Message& msg);
+
     std::mutex subscriptions_mutex_;
     std::unordered_map<uint64_t, Subscription> subscriptions_;
     uint64_t next_sub_id_ = 1;
@@ -59,9 +68,12 @@ private:
     std::queue<Message> message_queue_;
     std::condition_variable queue_cv_;
     std::thread dispatcher_thread_;
+    std::atomic<bool> dispatcher_started_{false};
     std::atomic<bool> running_{false};
 
     Handler external_handler_;
+    Handler output_handler_;
+    std::mutex output_mutex_;
     Stats stats_;
 
     void dispatcher_loop();

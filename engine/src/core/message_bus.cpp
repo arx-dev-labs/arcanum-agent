@@ -13,6 +13,19 @@ MessageBus::~MessageBus() {
     }
 }
 
+void MessageBus::start() {
+    if (dispatcher_started_.exchange(true)) {
+        return;
+    }
+    running_ = true;
+    dispatcher_thread_ = std::thread(&MessageBus::dispatcher_loop, this);
+}
+
+void MessageBus::set_output_handler(Handler handler) {
+    std::lock_guard<std::mutex> lock(output_mutex_);
+    output_handler_ = std::move(handler);
+}
+
 uint64_t MessageBus::subscribe(MessageType type, Handler handler) {
     std::lock_guard<std::mutex> lock(subscriptions_mutex_);
     uint64_t id = next_sub_id_++;
@@ -34,6 +47,7 @@ void MessageBus::unsubscribe(uint64_t subscription_id) {
 
 void MessageBus::publish(const Message& msg) {
     stats_.published++;
+    emit(msg);
     std::lock_guard<std::mutex> lock(queue_mutex_);
     message_queue_.push(msg);
     queue_cv_.notify_one();
@@ -41,23 +55,41 @@ void MessageBus::publish(const Message& msg) {
 
 void MessageBus::publish_async(const Message& msg) {
     stats_.published++;
+    emit(msg);
     // Deliver directly without queueing
     deliver_message(msg);
 }
 
+void MessageBus::emit(const Message& msg) {
+    std::lock_guard<std::mutex> lock(output_mutex_);
+    if (output_handler_) {
+        try {
+            output_handler_(msg);
+        } catch (const std::exception& e) {
+            stats_.failed++;
+            std::cerr << "Output handler error: " << e.what() << std::endl;
+        }
+    }
+}
+
 std::future<json> MessageBus::request(const Message& req, std::chrono::milliseconds timeout) {
-    std::promise<json> promise;
-    auto future = promise.get_future();
+    auto promise = std::make_shared<std::promise<json>>();
+    auto future = promise->get_future();
+    auto settled = std::make_shared<std::atomic<bool>>(false);
 
     uint64_t correlation_id = req.id;
     auto sub_id = subscribe([correlation_id](const Message& msg) {
         return msg.correlation_id == correlation_id &&
                (msg.type == MessageType::RESULT || msg.type == MessageType::ERROR);
-    }, [promise = std::move(promise)](const Message& msg) mutable {
+    }, [promise, settled](const Message& msg) {
+        bool expected = false;
+        if (!settled->compare_exchange_strong(expected, true)) {
+            return;  // timeout path already settled the promise
+        }
         if (msg.type == MessageType::RESULT) {
-            promise.set_value(msg.payload);
+            promise->set_value(msg.payload);
         } else {
-            promise.set_value(json{{"error", msg.payload.value("error", "Unknown error")}});
+            promise->set_value(json{{"error", msg.payload.value("error", "Unknown error")}});
         }
     });
 
@@ -66,7 +98,10 @@ std::future<json> MessageBus::request(const Message& req, std::chrono::milliseco
     // Wait with timeout
     if (future.wait_for(timeout) == std::future_status::timeout) {
         unsubscribe(sub_id);
-        promise.set_value(json{{"error", "Request timeout"}});
+        bool expected = false;
+        if (settled->compare_exchange_strong(expected, true)) {
+            promise->set_value(json{{"error", "Request timeout"}});
+        }
     }
 
     return future;
